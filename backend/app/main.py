@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.bible import router as bible_router
+from app.api.export import router as export_router
 from app.api.generation import router as generation_router
 from app.api.projects import router as projects_router
 from app.api.summary import router as summary_router
@@ -35,6 +36,7 @@ app.include_router(projects_router)
 app.include_router(bible_router)
 app.include_router(generation_router)
 app.include_router(summary_router)
+app.include_router(export_router)
 
 
 @app.get("/health")

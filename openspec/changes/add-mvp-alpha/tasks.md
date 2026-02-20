@@ -20,23 +20,23 @@
 - [x] 3.5 Write tests for Bible CRUD and lock behavior
 
 ## 4. AI Scene Generation
-- [ ] 4.1 Implement Instructor + Pydantic SceneCard model
-- [ ] 4.2 POST /api/generate/scene-card (non-streaming, structured JSON)
-- [ ] 4.3 Implement FastAPI SSE streaming for scene draft
-- [ ] 4.4 POST /api/generate/scene-draft (SSE streaming)
-- [ ] 4.5 Build basic Context Pack assembler (Bible locked fields + last N paragraphs)
-- [ ] 4.6 Build frontend streaming display (editor shows text as it generates)
-- [ ] 4.7 Write tests for scene card validation and streaming endpoint
+- [x] 4.1 Implement Instructor + Pydantic SceneCard model
+- [x] 4.2 POST /api/generate/scene-card (non-streaming, structured JSON)
+- [x] 4.3 Implement FastAPI SSE streaming for scene draft
+- [x] 4.4 POST /api/generate/scene-draft (SSE streaming)
+- [x] 4.5 Build basic Context Pack assembler (Bible locked fields + last N paragraphs)
+- [x] 4.6 Build frontend streaming display (editor shows text as it generates)
+- [x] 4.7 Write tests for scene card validation and streaming endpoint
 
 ## 5. Chapter Summary
-- [ ] 5.1 Create chapter_summaries table
-- [ ] 5.2 POST /api/extract/chapter-summary (auto-generate on chapter_mark_done)
-- [ ] 5.3 Integrate summary into Context Pack for next chapter
-- [ ] 5.4 Build summary display in right sidebar
-- [ ] 5.5 Write tests for summary generation and Context Pack integration
+- [x] 5.1 Create chapter_summaries table
+- [x] 5.2 POST /api/extract/chapter-summary (auto-generate on chapter_mark_done)
+- [x] 5.3 Integrate summary into Context Pack for next chapter
+- [x] 5.4 Build summary display in right sidebar
+- [x] 5.5 Write tests for summary generation and Context Pack integration
 
 ## 6. Export
-- [ ] 6.1 GET /api/export/markdown (full book / single chapter)
-- [ ] 6.2 GET /api/export/txt
-- [ ] 6.3 Build export button in frontend
-- [ ] 6.4 Write tests for export format correctness
+- [x] 6.1 GET /api/export/markdown (full book / single chapter)
+- [x] 6.2 GET /api/export/txt
+- [x] 6.3 Build export button in frontend
+- [x] 6.4 Write tests for export format correctness
