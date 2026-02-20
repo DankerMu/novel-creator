@@ -1,6 +1,6 @@
 import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -99,6 +99,9 @@ class SceneTextVersion(Base):
 
 class BibleField(Base):
     __tablename__ = "bible_fields"
+    __table_args__ = (
+        UniqueConstraint("project_id", "key", name="uq_bible_project_key"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))

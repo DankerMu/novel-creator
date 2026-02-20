@@ -15,7 +15,9 @@ DEFAULT_BIBLE_KEYS = [
 
 
 @router.get("/bible", response_model=list[BibleFieldOut])
-async def list_bible_fields(project_id: int, db: AsyncSession = Depends(get_db)):
+async def list_bible_fields(
+    project_id: int, db: AsyncSession = Depends(get_db)
+):
     result = await db.execute(
         select(BibleField)
         .where(BibleField.project_id == project_id)
@@ -29,7 +31,9 @@ async def list_bible_fields(project_id: int, db: AsyncSession = Depends(get_db))
         if not project:
             raise HTTPException(404, "Project not found")
         for key in DEFAULT_BIBLE_KEYS:
-            field = BibleField(project_id=project_id, key=key, value_md="", locked=False)
+            field = BibleField(
+                project_id=project_id, key=key, value_md="", locked=False
+            )
             db.add(field)
         await db.flush()
         result = await db.execute(
@@ -42,9 +46,27 @@ async def list_bible_fields(project_id: int, db: AsyncSession = Depends(get_db))
     return fields
 
 
+@router.get("/bible/locked", response_model=list[BibleFieldOut])
+async def get_locked_fields(
+    project_id: int, db: AsyncSession = Depends(get_db)
+):
+    """Get only locked Bible fields (used for Context Pack injection)."""
+    result = await db.execute(
+        select(BibleField)
+        .where(
+            BibleField.project_id == project_id,
+            BibleField.locked.is_(True),
+        )
+        .order_by(BibleField.id)
+    )
+    return result.scalars().all()
+
+
 @router.put("/bible/{field_id}", response_model=BibleFieldOut)
 async def update_bible_field(
-    field_id: int, data: BibleFieldUpdate, db: AsyncSession = Depends(get_db)
+    field_id: int,
+    data: BibleFieldUpdate,
+    db: AsyncSession = Depends(get_db),
 ):
     field = await db.get(BibleField, field_id)
     if not field:
@@ -54,14 +76,3 @@ async def update_bible_field(
     await db.flush()
     await db.refresh(field)
     return field
-
-
-@router.get("/bible/locked", response_model=list[BibleFieldOut])
-async def get_locked_fields(project_id: int, db: AsyncSession = Depends(get_db)):
-    """Get only locked Bible fields (used for Context Pack injection)."""
-    result = await db.execute(
-        select(BibleField)
-        .where(BibleField.project_id == project_id, BibleField.locked == True)  # noqa: E712
-        .order_by(BibleField.id)
-    )
-    return result.scalars().all()
