@@ -4,11 +4,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.schemas import (
-    BookCreate, BookOut, BookUpdate,
-    ChapterCreate, ChapterOut, ChapterUpdate,
-    ProjectCreate, ProjectOut, ProjectTree, ProjectUpdate,
-    SceneCreate, SceneOut, SceneUpdate,
-    SceneVersionCreate, SceneVersionOut,
+    BookCreate,
+    BookOut,
+    BookUpdate,
+    ChapterCreate,
+    ChapterOut,
+    ChapterUpdate,
+    ProjectCreate,
+    ProjectOut,
+    ProjectTree,
+    ProjectUpdate,
+    SceneCreate,
+    SceneOut,
+    SceneUpdate,
+    SceneVersionCreate,
+    SceneVersionOut,
 )
 from app.core.database import get_db
 from app.models import Book, Chapter, Project, Scene, SceneTextVersion

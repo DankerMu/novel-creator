@@ -19,8 +19,12 @@ class Project(Base):
         DateTime, server_default=func.now(), onupdate=func.now()
     )
 
-    books: Mapped[list["Book"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-    bible_fields: Mapped[list["BibleField"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    books: Mapped[list["Book"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    bible_fields: Mapped[list["BibleField"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 class Book(Base):
@@ -35,7 +39,9 @@ class Book(Base):
     )
 
     project: Mapped["Project"] = relationship(back_populates="books")
-    chapters: Mapped[list["Chapter"]] = relationship(back_populates="book", cascade="all, delete-orphan")
+    chapters: Mapped[list["Chapter"]] = relationship(
+        back_populates="book", cascade="all, delete-orphan"
+    )
 
 
 class Chapter(Base):
@@ -51,7 +57,9 @@ class Chapter(Base):
     )
 
     book: Mapped["Book"] = relationship(back_populates="chapters")
-    scenes: Mapped[list["Scene"]] = relationship(back_populates="chapter", cascade="all, delete-orphan")
+    scenes: Mapped[list["Scene"]] = relationship(
+        back_populates="chapter", cascade="all, delete-orphan"
+    )
 
 
 class Scene(Base):
@@ -67,7 +75,9 @@ class Scene(Base):
 
     chapter: Mapped["Chapter"] = relationship(back_populates="scenes")
     versions: Mapped[list["SceneTextVersion"]] = relationship(
-        back_populates="scene", cascade="all, delete-orphan", order_by="SceneTextVersion.version.desc()"
+        back_populates="scene",
+        cascade="all, delete-orphan",
+        order_by="SceneTextVersion.version.desc()",
     )
 
 
@@ -106,7 +116,9 @@ class ChapterSummary(Base):
     __tablename__ = "chapter_summaries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"), unique=True)
+    chapter_id: Mapped[int] = mapped_column(
+        ForeignKey("chapters.id", ondelete="CASCADE"), unique=True
+    )
     summary_md: Mapped[str] = mapped_column(Text, default="")
     keywords_json: Mapped[str] = mapped_column(Text, default="[]")
     entities_json: Mapped[str] = mapped_column(Text, default="[]")
