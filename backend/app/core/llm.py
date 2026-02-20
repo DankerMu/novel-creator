@@ -1,14 +1,33 @@
 """LLM provider abstraction via LiteLLM + Instructor."""
 
+from functools import lru_cache
+
 import instructor
 from litellm import acompletion
 from openai import AsyncOpenAI
 
 from app.core.config import settings
 
-# Instructor client for structured outputs (SceneCard, ChapterSummary, etc.)
-_openai_client = AsyncOpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_API_BASE)
-instructor_client = instructor.from_openai(_openai_client)
+
+@lru_cache(maxsize=1)
+def get_instructor_client():
+    """Lazy-init Instructor client (avoids import-time HTTP client creation)."""
+    client = AsyncOpenAI(
+        api_key=settings.LLM_API_KEY,
+        base_url=settings.LLM_API_BASE,
+    )
+    return instructor.from_openai(client)
+
+
+# Module-level alias for backward compatibility
+class _InstructorProxy:
+    """Proxy that lazily initializes the instructor client."""
+    @property
+    def chat(self):
+        return get_instructor_client().chat
+
+
+instructor_client = _InstructorProxy()
 
 
 async def call_llm(
@@ -30,7 +49,9 @@ async def call_llm(
     return response
 
 
-async def call_llm_stream(messages: list[dict], model: str | None = None, **kwargs):
+async def call_llm_stream(
+    messages: list[dict], model: str | None = None, **kwargs
+):
     """Streaming LLM call, yields text chunks."""
     model = model or settings.LLM_MODEL
     response = await acompletion(
