@@ -10,7 +10,10 @@ from app.api.schemas import ChapterSummaryOut
 from app.core.database import get_db
 from app.core.events import ChapterMarkDoneEvent, emit
 from app.models import Book, Chapter, ChapterSummary
-from app.services.summary import generate_chapter_summary
+from app.services.summary import (
+    EmptyChapterError,
+    generate_chapter_summary,
+)
 
 router = APIRouter(prefix="/api", tags=["summary"])
 
@@ -27,6 +30,17 @@ async def mark_chapter_done(
     if not chapter:
         raise HTTPException(404, "Chapter not found")
 
+    # Idempotency: if already done, return existing summary
+    if chapter.status == "done":
+        result = await db.execute(
+            select(ChapterSummary).where(
+                ChapterSummary.chapter_id == chapter_id
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            return _summary_to_out(existing)
+
     chapter.status = "done"
     await db.flush()
 
@@ -35,6 +49,7 @@ async def mark_chapter_done(
     if not book:
         raise HTTPException(404, "Book not found")
 
+    # TODO: wire handlers for auto-bible-update etc.
     await emit(
         ChapterMarkDoneEvent(
             chapter_id=chapter_id,
@@ -42,12 +57,20 @@ async def mark_chapter_done(
         )
     )
 
-    summary = await generate_chapter_summary(db, chapter_id)
+    try:
+        summary = await generate_chapter_summary(
+            db, chapter_id
+        )
+    except EmptyChapterError:
+        raise HTTPException(
+            400, "Chapter has no text content"
+        )
+
     return _summary_to_out(summary)
 
 
 @router.post(
-    "/extract/chapter-summary",
+    "/chapters/{chapter_id}/extract-summary",
     response_model=ChapterSummaryOut,
 )
 async def extract_chapter_summary(
@@ -58,7 +81,15 @@ async def extract_chapter_summary(
     if not chapter:
         raise HTTPException(404, "Chapter not found")
 
-    summary = await generate_chapter_summary(db, chapter_id)
+    try:
+        summary = await generate_chapter_summary(
+            db, chapter_id
+        )
+    except EmptyChapterError:
+        raise HTTPException(
+            400, "Chapter has no text content"
+        )
+
     return _summary_to_out(summary)
 
 
@@ -92,6 +123,9 @@ def _summary_to_out(summary: ChapterSummary) -> dict:
         "id": summary.id,
         "chapter_id": summary.chapter_id,
         "summary_md": summary.summary_md,
+        "key_events": json.loads(
+            summary.key_events_json
+        ),
         "keywords": json.loads(summary.keywords_json),
         "entities": json.loads(summary.entities_json),
         "plot_threads": json.loads(

@@ -44,6 +44,25 @@ async def _setup_chapter_with_text(client):
     return pid, bid, cid, sid
 
 
+async def _setup_empty_chapter(client):
+    """Create project → book → chapter with no scene text."""
+    resp = await client.post(
+        "/api/projects", json={"title": "空章节项目"}
+    )
+    pid = resp.json()["id"]
+    resp = await client.post(
+        "/api/books",
+        json={"project_id": pid, "title": "卷"},
+    )
+    bid = resp.json()["id"]
+    resp = await client.post(
+        "/api/chapters",
+        json={"book_id": bid, "title": "空章"},
+    )
+    cid = resp.json()["id"]
+    return pid, bid, cid
+
+
 MOCK_SUMMARY = ChapterSummaryModel(
     narrative="林远在荒漠星球遭遇飞船故障，"
     "必须在恶劣环境中寻找修复方案。",
@@ -75,6 +94,7 @@ async def test_mark_done_generates_summary(client):
     data = resp.json()
     assert data["chapter_id"] == cid
     assert "林远" in data["summary_md"]
+    assert "飞船引擎故障" in data["key_events"]
     assert "飞船" in data["keywords"]
     assert "林远" in data["entities"]
     assert len(data["plot_threads"]) == 2
@@ -88,6 +108,47 @@ async def test_mark_done_generates_summary(client):
 async def test_mark_done_404(client):
     resp = await client.post("/api/chapters/9999/mark-done")
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_mark_done_empty_chapter(client):
+    """Mark-done on chapter with no text returns 400."""
+    _pid, _bid, cid = await _setup_empty_chapter(client)
+
+    resp = await client.post(
+        f"/api/chapters/{cid}/mark-done"
+    )
+    assert resp.status_code == 400
+    assert "no text" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_mark_done_idempotent(client):
+    """Calling mark-done twice returns existing summary."""
+    _pid, _bid, cid, _sid = await _setup_chapter_with_text(
+        client
+    )
+
+    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
+
+    with patch(
+        "app.services.summary.instructor_client"
+    ) as mock_client:
+        mock_client.chat.completions.create = mock_create
+        resp1 = await client.post(
+            f"/api/chapters/{cid}/mark-done"
+        )
+
+    assert resp1.status_code == 200
+
+    # Second call should NOT invoke LLM
+    resp2 = await client.post(
+        f"/api/chapters/{cid}/mark-done"
+    )
+    assert resp2.status_code == 200
+    assert resp2.json()["summary_md"] == MOCK_SUMMARY.narrative
+    # LLM was only called once
+    assert mock_create.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -111,25 +172,13 @@ async def test_get_summary(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["summary_md"] == MOCK_SUMMARY.narrative
+    assert data["key_events"] == MOCK_SUMMARY.key_events
 
 
 @pytest.mark.asyncio
 async def test_get_summary_404(client):
     """Summary not found for chapter without summary."""
-    resp = await client.post(
-        "/api/projects", json={"title": "空项目"}
-    )
-    pid = resp.json()["id"]
-    resp = await client.post(
-        "/api/books",
-        json={"project_id": pid, "title": "卷"},
-    )
-    bid = resp.json()["id"]
-    resp = await client.post(
-        "/api/chapters",
-        json={"book_id": bid, "title": "章"},
-    )
-    cid = resp.json()["id"]
+    _pid, _bid, cid = await _setup_empty_chapter(client)
 
     resp = await client.get(
         f"/api/chapters/{cid}/summary"
@@ -139,7 +188,7 @@ async def test_get_summary_404(client):
 
 @pytest.mark.asyncio
 async def test_extract_chapter_summary(client):
-    """Manual summary extraction endpoint."""
+    """Manual summary extraction via path param."""
     _pid, _bid, cid, _sid = await _setup_chapter_with_text(
         client
     )
@@ -151,7 +200,7 @@ async def test_extract_chapter_summary(client):
     ) as mock_client:
         mock_client.chat.completions.create = mock_create
         resp = await client.post(
-            f"/api/extract/chapter-summary?chapter_id={cid}"
+            f"/api/chapters/{cid}/extract-summary"
         )
 
     assert resp.status_code == 200
@@ -160,7 +209,44 @@ async def test_extract_chapter_summary(client):
 
 
 @pytest.mark.asyncio
-async def test_summary_in_context_pack(client):
+async def test_extract_upsert(client):
+    """Re-extracting summary updates existing record."""
+    _pid, _bid, cid, _sid = await _setup_chapter_with_text(
+        client
+    )
+
+    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
+
+    with patch(
+        "app.services.summary.instructor_client"
+    ) as mock_client:
+        mock_client.chat.completions.create = mock_create
+        resp1 = await client.post(
+            f"/api/chapters/{cid}/extract-summary"
+        )
+        # Re-extract with updated mock
+        updated = ChapterSummaryModel(
+            narrative="更新后的摘要",
+            key_events=["新事件"],
+            keywords=["新关键词"],
+            entities=["新角色"],
+            plot_threads=["新线索"],
+        )
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=updated
+        )
+        resp2 = await client.post(
+            f"/api/chapters/{cid}/extract-summary"
+        )
+
+    assert resp1.json()["id"] == resp2.json()["id"]
+    assert resp2.json()["summary_md"] == "更新后的摘要"
+
+
+@pytest.mark.asyncio
+async def test_summary_in_context_pack(
+    client, db_session
+):
     """Summary appears in next chapter's Context Pack."""
     _pid, _bid, cid1, _sid = (
         await _setup_chapter_with_text(client)
@@ -187,18 +273,13 @@ async def test_summary_in_context_pack(client):
     )
     cid2 = resp.json()["id"]
 
-    # Verify summary in context pack
-    from app.core.database import get_db
-    from app.main import app
+    # Verify summary in context pack using fixture session
     from app.services.context_pack import (
         get_chapter_summaries_text,
     )
 
-    db_gen = app.dependency_overrides[get_db]()
-    db = await db_gen.__anext__()
-
     summaries_text = await get_chapter_summaries_text(
-        db, cid2
+        db_session, cid2
     )
     assert "林远" in summaries_text
     assert "前文摘要" in summaries_text

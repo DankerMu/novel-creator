@@ -123,9 +123,15 @@ class ChapterSummary(Base):
         ForeignKey("chapters.id", ondelete="CASCADE"), unique=True
     )
     summary_md: Mapped[str] = mapped_column(Text, default="")
+    key_events_json: Mapped[str] = mapped_column(
+        Text, default="[]"
+    )
     keywords_json: Mapped[str] = mapped_column(Text, default="[]")
     entities_json: Mapped[str] = mapped_column(Text, default="[]")
     plot_threads_json: Mapped[str] = mapped_column(Text, default="[]")
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )

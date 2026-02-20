@@ -130,6 +130,7 @@ class ChapterSummaryOut(BaseModel):
     id: int
     chapter_id: int
     summary_md: str
+    key_events: list[str]
     keywords: list[str]
     entities: list[str]
     plot_threads: list[str]

@@ -1,4 +1,4 @@
-"""Chapter summary generation service with event-driven trigger."""
+"""Chapter summary generation service."""
 
 import json
 
@@ -14,6 +14,9 @@ from app.models import (
     Scene,
     SceneTextVersion,
 )
+
+# Rough char-to-token ratio for Chinese text
+_MAX_PROMPT_CHARS = 20000
 
 
 async def _collect_chapter_text(
@@ -40,7 +43,15 @@ async def _collect_chapter_text(
             parts.append(
                 f"## {scene.title}\n\n{version.content_md}"
             )
-    return "\n\n".join(parts)
+    text = "\n\n".join(parts)
+    # Truncate to stay within model context limits
+    if len(text) > _MAX_PROMPT_CHARS:
+        text = text[:_MAX_PROMPT_CHARS] + "\n\n[...截断...]"
+    return text
+
+
+class EmptyChapterError(Exception):
+    """Raised when chapter has no text content."""
 
 
 async def generate_chapter_summary(
@@ -53,7 +64,9 @@ async def generate_chapter_summary(
 
     full_text = await _collect_chapter_text(db, chapter_id)
     if not full_text.strip():
-        raise ValueError("Chapter has no text content")
+        raise EmptyChapterError(
+            "Chapter has no text content"
+        )
 
     prompt = f"""\
 你是一位专业的小说编辑。请为以下章节内容生成结构化摘要。
@@ -76,6 +89,9 @@ async def generate_chapter_summary(
         max_retries=settings.LLM_MAX_RETRIES,
     )
 
+    def _dumps(obj):
+        return json.dumps(obj, ensure_ascii=False)
+
     # Upsert: replace existing summary if present
     existing = await db.execute(
         select(ChapterSummary).where(
@@ -86,28 +102,20 @@ async def generate_chapter_summary(
 
     if summary:
         summary.summary_md = result.narrative
-        summary.keywords_json = json.dumps(
-            result.keywords, ensure_ascii=False
-        )
-        summary.entities_json = json.dumps(
-            result.entities, ensure_ascii=False
-        )
-        summary.plot_threads_json = json.dumps(
-            result.plot_threads, ensure_ascii=False
+        summary.key_events_json = _dumps(result.key_events)
+        summary.keywords_json = _dumps(result.keywords)
+        summary.entities_json = _dumps(result.entities)
+        summary.plot_threads_json = _dumps(
+            result.plot_threads
         )
     else:
         summary = ChapterSummary(
             chapter_id=chapter_id,
             summary_md=result.narrative,
-            keywords_json=json.dumps(
-                result.keywords, ensure_ascii=False
-            ),
-            entities_json=json.dumps(
-                result.entities, ensure_ascii=False
-            ),
-            plot_threads_json=json.dumps(
-                result.plot_threads, ensure_ascii=False
-            ),
+            key_events_json=_dumps(result.key_events),
+            keywords_json=_dumps(result.keywords),
+            entities_json=_dumps(result.entities),
+            plot_threads_json=_dumps(result.plot_threads),
         )
         db.add(summary)
 
