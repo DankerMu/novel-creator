@@ -117,18 +117,26 @@ async def get_chapter_summary(
     return _summary_to_out(summary)
 
 
+def _safe_loads(raw: str) -> list:
+    """Safely parse JSON, return empty list on failure."""
+    try:
+        return json.loads(raw) if raw else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
 def _summary_to_out(summary: ChapterSummary) -> dict:
     """Convert ChapterSummary ORM to response dict."""
     return {
         "id": summary.id,
         "chapter_id": summary.chapter_id,
         "summary_md": summary.summary_md,
-        "key_events": json.loads(
+        "key_events": _safe_loads(
             summary.key_events_json
         ),
-        "keywords": json.loads(summary.keywords_json),
-        "entities": json.loads(summary.entities_json),
-        "plot_threads": json.loads(
+        "keywords": _safe_loads(summary.keywords_json),
+        "entities": _safe_loads(summary.entities_json),
+        "plot_threads": _safe_loads(
             summary.plot_threads_json
         ),
         "created_at": summary.created_at,

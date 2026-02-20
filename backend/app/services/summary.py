@@ -2,7 +2,8 @@
 
 import json
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.ai_schemas import ChapterSummaryModel
@@ -22,29 +23,41 @@ _MAX_PROMPT_CHARS = 20000
 async def _collect_chapter_text(
     db: AsyncSession, chapter_id: int
 ) -> str:
-    """Concatenate all scene texts in a chapter."""
+    """Concatenate all scene texts in a chapter (single query)."""
+    # Subquery: latest version per scene
+    latest_ver = (
+        select(
+            SceneTextVersion.scene_id,
+            func.max(SceneTextVersion.version).label(
+                "max_ver"
+            ),
+        )
+        .group_by(SceneTextVersion.scene_id)
+        .subquery()
+    )
+
     result = await db.execute(
-        select(Scene)
+        select(Scene.title, SceneTextVersion.content_md)
+        .join(latest_ver, latest_ver.c.scene_id == Scene.id)
+        .join(
+            SceneTextVersion,
+            (SceneTextVersion.scene_id == Scene.id)
+            & (
+                SceneTextVersion.version
+                == latest_ver.c.max_ver
+            ),
+        )
         .where(Scene.chapter_id == chapter_id)
         .order_by(Scene.sort_order)
     )
-    scenes = result.scalars().all()
+    rows = result.all()
 
     parts = []
-    for scene in scenes:
-        ver_result = await db.execute(
-            select(SceneTextVersion)
-            .where(SceneTextVersion.scene_id == scene.id)
-            .order_by(SceneTextVersion.version.desc())
-            .limit(1)
-        )
-        version = ver_result.scalar_one_or_none()
-        if version and version.content_md.strip():
-            parts.append(
-                f"## {scene.title}\n\n{version.content_md}"
-            )
+    for title, content_md in rows:
+        if content_md and content_md.strip():
+            parts.append(f"## {title}\n\n{content_md}")
+
     text = "\n\n".join(parts)
-    # Truncate to stay within model context limits
     if len(text) > _MAX_PROMPT_CHARS:
         text = text[:_MAX_PROMPT_CHARS] + "\n\n[...截断...]"
     return text
@@ -118,6 +131,18 @@ async def generate_chapter_summary(
             plot_threads_json=_dumps(result.plot_threads),
         )
         db.add(summary)
+        try:
+            await db.flush()
+        except IntegrityError:
+            # Concurrent insert race: reload existing
+            await db.rollback()
+            existing = await db.execute(
+                select(ChapterSummary).where(
+                    ChapterSummary.chapter_id == chapter_id
+                )
+            )
+            summary = existing.scalar_one()
+            return summary
 
     await db.flush()
     await db.refresh(summary)

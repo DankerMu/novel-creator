@@ -9,6 +9,7 @@ interface ChapterSummary {
   id: number
   chapter_id: number
   summary_md: string
+  key_events: string[]
   keywords: string[]
   entities: string[]
   plot_threads: string[]
@@ -88,13 +89,24 @@ export function SummaryPanel({
             {summary.summary_md}
           </div>
 
+          {summary.key_events.length > 0 && (
+            <div>
+              <b>关键事件:</b>
+              <ul className="list-disc list-inside mt-1">
+                {summary.key_events.map((ev, i) => (
+                  <li key={`ev-${i}`}>{ev}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {summary.keywords.length > 0 && (
             <div>
               <b>关键词:</b>
               <div className="flex flex-wrap gap-1 mt-1">
-                {summary.keywords.map((kw) => (
+                {summary.keywords.map((kw, i) => (
                   <span
-                    key={kw}
+                    key={`kw-${i}`}
                     className="bg-blue-100 text-blue-700 px-1.5
                       py-0.5 rounded"
                   >
@@ -109,9 +121,9 @@ export function SummaryPanel({
             <div>
               <b>实体:</b>
               <div className="flex flex-wrap gap-1 mt-1">
-                {summary.entities.map((ent) => (
+                {summary.entities.map((ent, i) => (
                   <span
-                    key={ent}
+                    key={`ent-${i}`}
                     className="bg-green-100 text-green-700 px-1.5
                       py-0.5 rounded"
                   >
@@ -126,8 +138,8 @@ export function SummaryPanel({
             <div>
               <b>情节线索:</b>
               <ul className="list-disc list-inside mt-1">
-                {summary.plot_threads.map((pt) => (
-                  <li key={pt}>{pt}</li>
+                {summary.plot_threads.map((pt, i) => (
+                  <li key={`pt-${i}`}>{pt}</li>
                 ))}
               </ul>
             </div>
