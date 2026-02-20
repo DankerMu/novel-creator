@@ -2,7 +2,7 @@
 
 import asyncio
 from collections import defaultdict
-from typing import Any, Callable
+from typing import Callable
 
 from pydantic import BaseModel
 

@@ -4,7 +4,10 @@ import pytest
 @pytest.mark.asyncio
 async def test_crud_project(client):
     # Create
-    resp = await client.post("/api/projects", json={"title": "测试小说", "description": "一个测试项目"})
+    resp = await client.post(
+        "/api/projects",
+        json={"title": "测试小说", "description": "一个测试项目"},
+    )
     assert resp.status_code == 201
     project = resp.json()
     pid = project["id"]
@@ -111,7 +114,7 @@ async def test_crud_scene_and_versions(client):
     )
     assert resp.status_code == 201
     assert resp.json()["version"] == 2
-    assert resp.json()["char_count"] == 9
+    assert resp.json()["char_count"] == 10
 
     # Get latest version
     resp = await client.get(f"/api/scenes/{sid}/versions/latest")

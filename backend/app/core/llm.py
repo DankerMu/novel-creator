@@ -1,8 +1,8 @@
 """LLM provider abstraction via LiteLLM + Instructor."""
 
-from openai import AsyncOpenAI
 import instructor
 from litellm import acompletion
+from openai import AsyncOpenAI
 
 from app.core.config import settings
 

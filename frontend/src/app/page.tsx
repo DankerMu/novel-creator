@@ -6,6 +6,7 @@ import { useWorkspace } from '@/hooks/use-workspace'
 import type { Project } from '@/lib/types'
 import { ProjectTreePanel } from '@/components/project-tree'
 import { SceneEditor } from '@/components/scene-editor'
+import { BiblePanel } from '@/components/bible-panel'
 
 export default function WorkspacePage() {
   const { projectId, setProjectId } = useWorkspace()
@@ -59,6 +60,11 @@ export default function WorkspacePage() {
       <main className="flex-1 overflow-hidden">
         <SceneEditor />
       </main>
+
+      {/* Right: Bible Panel */}
+      <aside className="w-72 border-l overflow-y-auto bg-gray-50">
+        <BiblePanel />
+      </aside>
     </div>
   )
 }

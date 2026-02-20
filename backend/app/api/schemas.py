@@ -123,3 +123,18 @@ class ProjectTree(BaseModel):
     title: str
     books: list[BookTreeNode]
     model_config = {"from_attributes": True}
+
+
+# --- BibleField ---
+class BibleFieldUpdate(BaseModel):
+    value_md: str | None = None
+    locked: bool | None = None
+
+class BibleFieldOut(BaseModel):
+    id: int
+    project_id: int
+    key: str
+    value_md: str
+    locked: bool
+    updated_at: datetime
+    model_config = {"from_attributes": True}
