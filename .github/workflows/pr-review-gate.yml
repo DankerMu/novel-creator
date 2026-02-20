@@ -1,0 +1,115 @@
+name: PR Review Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  statuses: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  # Job 1: Mark PR as pending when opened/updated
+  pr-updated:
+    name: Mark Review Pending
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.pull_request.head.sha,
+              state: 'pending',
+              context: 'gh-pr-review',
+              description: 'Waiting for Agent Team review comment',
+              target_url: context.payload.pull_request.html_url
+            });
+            console.log(`Marked ${context.payload.pull_request.head.sha} as pending`);
+
+  # Job 2: Parse review marker from comments
+  comment-marker:
+    name: Check Review Marker
+    if: >
+      github.event_name == 'issue_comment'
+      && github.event.issue.pull_request
+      && contains(github.event.comment.body, 'gh-pr-review:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.comment.body;
+            const author = context.payload.comment.author_association;
+
+            // 1. Permission check
+            const allowed = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+            if (!allowed.has(author)) {
+              console.log(`Commenter association '${author}' not allowed`);
+              return;
+            }
+
+            // 2. Parse marker
+            const re = /<!-- gh-pr-review: sha=([a-f0-9]{7,40}) decision=(PASS|FAIL) score=([1-5]) -->/;
+            const match = body.match(re);
+            if (!match) {
+              console.log('No valid marker found');
+              return;
+            }
+
+            const [, markerSha, decision, scoreStr] = match;
+            const score = parseInt(scoreStr, 10);
+            console.log(`Marker: sha=${markerSha} decision=${decision} score=${score}`);
+
+            // 3. Get PR head SHA
+            const prNumber = context.payload.issue.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+            const headSha = pr.head.sha;
+
+            // 4. SHA match (support abbreviated)
+            const shaMatches =
+              headSha === markerSha ||
+              headSha.startsWith(markerSha) ||
+              markerSha.startsWith(headSha);
+
+            if (!shaMatches) {
+              console.log(`SHA mismatch: head=${headSha} marker=${markerSha}`);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: headSha,
+                state: 'failure',
+                context: 'gh-pr-review',
+                description: `Stale review: marker sha=${markerSha} != head`,
+                target_url: pr.html_url
+              });
+              return;
+            }
+
+            // 5. Evaluate decision + score
+            const pass = decision === 'PASS' && score >= 4;
+            const state = pass ? 'success' : 'failure';
+            const desc = pass
+              ? `Review PASSED (score=${score}/5)`
+              : `Review ${decision} (score=${score}/5, need PASS ≥ 4)`;
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: headSha,
+              state,
+              context: 'gh-pr-review',
+              description: desc,
+              target_url: pr.html_url
+            });
+
+            console.log(`Status set to ${state}: ${desc}`);

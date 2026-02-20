@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  openspec-validate:
+    name: OpenSpec Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install OpenSpec CLI
+        run: npm install -g @anthropic-ai/openspec
+
+      - name: Validate all changes
+        run: openspec validate --all --strict --no-interactive
+
+  quality:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python lint (if applicable)
+        run: |
+          if find . -name '*.py' -not -path './ref-repo/*' -not -path './.venv/*' | grep -q .; then
+            pip install ruff
+            ruff check .
+          else
+            echo 'No Python files found, skipping'
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: TypeScript lint (if applicable)
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend && npm ci && npm run lint
+          else
+            echo 'No frontend package.json found, skipping'
+          fi
+
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        run: |
+          git log --format='%s' origin/main..HEAD | while IFS= read -r msg; do
+            if ! echo "$msg" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .+'; then
+              echo "::error::Invalid commit message: $msg"
+              echo "Expected: type(scope): description"
+              exit 1
+            fi
+          done
+          echo 'All commit messages follow Conventional Commits'
