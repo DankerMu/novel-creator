@@ -88,4 +88,5 @@ temp/
 *.tmp
 
 # Claude Code
-.claude/plans/
+.claude/
+.memsearch/
