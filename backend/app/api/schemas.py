@@ -125,6 +125,18 @@ class ProjectTree(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- ChapterSummary ---
+class ChapterSummaryOut(BaseModel):
+    id: int
+    chapter_id: int
+    summary_md: str
+    keywords: list[str]
+    entities: list[str]
+    plot_threads: list[str]
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
 # --- BibleField ---
 class BibleFieldUpdate(BaseModel):
     value_md: str | None = None
