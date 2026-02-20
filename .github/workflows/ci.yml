@@ -60,10 +60,13 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
       - name: TypeScript lint (if applicable)
         run: |
           if [ -f frontend/package.json ]; then
-            cd frontend && npm ci && npm run lint
+            cd frontend && pnpm install --no-frozen-lockfile && pnpm lint
           else
             echo 'No frontend package.json found, skipping'
           fi
