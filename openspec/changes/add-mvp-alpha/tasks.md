@@ -1,9 +1,9 @@
 ## 1. Project Scaffolding
-- [ ] 1.1 Initialize FastAPI backend project (uv + pyproject.toml)
-- [ ] 1.2 Initialize React/Next.js frontend project (pnpm + TypeScript)
-- [ ] 1.3 Configure SQLite + Alembic migrations
-- [ ] 1.4 Set up Docker Compose (api + web)
-- [ ] 1.5 Configure LLM provider abstraction (OpenAI-compatible endpoint)
+- [x] 1.1 Initialize FastAPI backend project (uv + pyproject.toml)
+- [x] 1.2 Initialize React/Next.js frontend project (pnpm + TypeScript)
+- [x] 1.3 Configure SQLite + Alembic migrations
+- [x] 1.4 Set up Docker Compose (api + web)
+- [x] 1.5 Configure LLM provider abstraction (OpenAI-compatible endpoint)
 
 ## 2. Project Management CRUD
 - [ ] 2.1 Create SQLite tables: projects, books, chapters, scenes, scene_text_versions
