@@ -6,10 +6,14 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export function ExportPanel({
   bookId,
+  bookTitle,
   chapterId,
+  chapterTitle,
 }: {
   bookId: number
+  bookTitle?: string
   chapterId?: number
+  chapterTitle?: string
 }) {
   const [exporting, setExporting] = useState(false)
 
@@ -26,12 +30,13 @@ export function ExportPanel({
 
       const text = await resp.text()
       const ext = format === 'markdown' ? 'md' : 'txt'
+      const name = chapterTitle || bookTitle || 'export'
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `export.${ext}`
+      a.download = `${name}.${ext}`
       a.click()
-      URL.revokeObjectURL(a.href)
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
     } catch {
       alert('导出失败')
     } finally {

@@ -36,7 +36,7 @@
 - [x] 5.5 Write tests for summary generation and Context Pack integration
 
 ## 6. Export
-- [ ] 6.1 GET /api/export/markdown (full book / single chapter)
-- [ ] 6.2 GET /api/export/txt
-- [ ] 6.3 Build export button in frontend
-- [ ] 6.4 Write tests for export format correctness
+- [x] 6.1 GET /api/export/markdown (full book / single chapter)
+- [x] 6.2 GET /api/export/txt
+- [x] 6.3 Build export button in frontend
+- [x] 6.4 Write tests for export format correctness

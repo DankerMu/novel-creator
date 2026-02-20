@@ -1,8 +1,11 @@
 """Export endpoints: Markdown and TXT format."""
 
+import unicodedata
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -11,28 +14,53 @@ from app.models import Book, Chapter, Scene, SceneTextVersion
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+def _cjk_width(text: str) -> int:
+    """Compute display width accounting for CJK double-width chars."""
+    w = 0
+    for ch in text:
+        eaw = unicodedata.east_asian_width(ch)
+        w += 2 if eaw in ("W", "F") else 1
+    return w
+
+
+def _content_disposition(filename: str) -> str:
+    """RFC 5987 Content-Disposition header value."""
+    encoded = quote(filename)
+    return f"attachment; filename*=UTF-8''{encoded}"
+
+
 async def _get_chapter_text(
     db: AsyncSession, chapter: Chapter
 ) -> str:
-    """Collect all scene text for a chapter."""
+    """Collect all scene text for a chapter (single query)."""
+    latest_ver = (
+        select(
+            SceneTextVersion.scene_id,
+            func.max(SceneTextVersion.version).label(
+                "max_ver"
+            ),
+        )
+        .group_by(SceneTextVersion.scene_id)
+        .subquery()
+    )
+
     result = await db.execute(
-        select(Scene)
+        select(SceneTextVersion.content_md)
+        .join(Scene, Scene.id == SceneTextVersion.scene_id)
+        .join(
+            latest_ver,
+            (latest_ver.c.scene_id == SceneTextVersion.scene_id)
+            & (
+                SceneTextVersion.version
+                == latest_ver.c.max_ver
+            ),
+        )
         .where(Scene.chapter_id == chapter.id)
         .order_by(Scene.sort_order)
     )
-    scenes = result.scalars().all()
+    rows = result.scalars().all()
 
-    parts = []
-    for scene in scenes:
-        ver_result = await db.execute(
-            select(SceneTextVersion)
-            .where(SceneTextVersion.scene_id == scene.id)
-            .order_by(SceneTextVersion.version.desc())
-            .limit(1)
-        )
-        version = ver_result.scalar_one_or_none()
-        if version and version.content_md.strip():
-            parts.append(version.content_md)
+    parts = [r for r in rows if r and r.strip()]
     return "\n\n".join(parts)
 
 
@@ -47,14 +75,20 @@ async def export_markdown(
     if not book:
         raise HTTPException(404, "Book not found")
 
-    if chapter_id:
+    if chapter_id is not None:
         chapter = await db.get(Chapter, chapter_id)
         if not chapter or chapter.book_id != book_id:
             raise HTTPException(404, "Chapter not found")
         text = await _get_chapter_text(db, chapter)
         md = f"# {chapter.title}\n\n{text}"
         return PlainTextResponse(
-            md, media_type="text/markdown; charset=utf-8"
+            md,
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": _content_disposition(
+                    f"{chapter.title}.md"
+                )
+            },
         )
 
     # Full book export
@@ -76,6 +110,11 @@ async def export_markdown(
     return PlainTextResponse(
         "\n\n".join(parts),
         media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": _content_disposition(
+                f"{book.title}.md"
+            )
+        },
     )
 
 
@@ -90,7 +129,7 @@ async def export_txt(
     if not book:
         raise HTTPException(404, "Book not found")
 
-    if chapter_id:
+    if chapter_id is not None:
         chapter = await db.get(Chapter, chapter_id)
         if not chapter or chapter.book_id != book_id:
             raise HTTPException(404, "Chapter not found")
@@ -98,6 +137,11 @@ async def export_txt(
         return PlainTextResponse(
             f"{chapter.title}\n\n{text}",
             media_type="text/plain; charset=utf-8",
+            headers={
+                "Content-Disposition": _content_disposition(
+                    f"{chapter.title}.txt"
+                )
+            },
         )
 
     # Full book export
@@ -108,10 +152,10 @@ async def export_txt(
     )
     chapters = result.scalars().all()
 
-    parts = [book.title, "=" * len(book.title)]
+    parts = [book.title, "=" * _cjk_width(book.title)]
     for ch in chapters:
         parts.append(f"\n{ch.title}")
-        parts.append("-" * len(ch.title))
+        parts.append("-" * _cjk_width(ch.title))
         text = await _get_chapter_text(db, ch)
         if text:
             parts.append(text)
@@ -119,4 +163,9 @@ async def export_txt(
     return PlainTextResponse(
         "\n".join(parts),
         media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": _content_disposition(
+                f"{book.title}.txt"
+            )
+        },
     )
