@@ -3,14 +3,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.projects import router as projects_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure data dir exists
     import os
     os.makedirs("data", exist_ok=True)
     yield
-    # Shutdown
 
 
 app = FastAPI(
@@ -27,6 +27,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(projects_router)
 
 
 @app.get("/health")
