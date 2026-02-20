@@ -1,0 +1,44 @@
+{
+  "project": "novel-ai-platform",
+  "type": "tech-design",
+  "created": "2026-02-20T08:00:00Z",
+  "current_phase": "DONE",
+  "current_version": 2,
+  "termination": {
+    "score_threshold": 90,
+    "max_iterations": 5
+  },
+  "iterations": [
+    {
+      "version": 1,
+      "phase_completed": "REVIEW",
+      "score": 82,
+      "new_dr_items": 5,
+      "dr_reports": [
+        "dr/dr-001-sqlite-graph-feasibility.md",
+        "dr/dr-002-context-token-budget.md",
+        "dr/dr-003-streaming-gate-complexity.md",
+        "dr/dr-004-neo4j-evidence-performance.md",
+        "dr/dr-005-lorebook-budget-strategy.md",
+        "dr/dr-006-consistency-check-automation.md",
+        "dr/dr-007-workflow-dsl-engine.md",
+        "dr/dr-008-vector-search-necessity.md",
+        "dr/dr-009-kg-review-ux-burden.md",
+        "dr/dr-010-mvp-timeline-feasibility.md",
+        "dr/dr-011-fastapi-sse-json-validation.md",
+        "dr/dr-012-million-word-demand-validation.md"
+      ],
+      "skipped_items": [],
+      "timestamp": "2026-02-20T12:20:00Z"
+    },
+    {
+      "version": 2,
+      "phase_completed": "FINALIZE",
+      "score": 91,
+      "new_dr_items": 0,
+      "dr_reports": [],
+      "skipped_items": [],
+      "timestamp": "2026-02-20T13:00:00Z"
+    }
+  ]
+}
