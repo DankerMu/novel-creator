@@ -198,6 +198,19 @@ class LoreEntryOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Consistency Check ---
+
+class ConsistencyResult(BaseModel):
+    type: str
+    severity: str
+    confidence: float
+    source: str
+    message: str
+    evidence: list[str]
+    evidence_locations: list[str]
+    suggest_fix: str
+
+
 # --- KG ---
 
 class KGNodeOut(BaseModel):
