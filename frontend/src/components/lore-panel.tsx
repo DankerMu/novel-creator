@@ -81,6 +81,7 @@ export function LorePanel() {
       queryClient.invalidateQueries({ queryKey: ['lore-entries', projectId] })
       setEditingId(null)
     },
+    onError: (e) => setError(e instanceof Error ? e.message : '删除失败'),
   })
 
   const handleExport = async () => {
@@ -101,15 +102,22 @@ export function LorePanel() {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
       const text = await file.text()
+      let data: unknown
       try {
-        const data = JSON.parse(text)
-        await apiFetch('/api/lore/import', {
-          method: 'POST',
-          body: JSON.stringify({ project_id: projectId, data }),
-        })
-        queryClient.invalidateQueries({ queryKey: ['lore-entries', projectId] })
+        data = JSON.parse(text)
       } catch {
         setError('导入失败：JSON 格式错误')
+        return
+      }
+      try {
+        const payload = data as Record<string, unknown>
+        await apiFetch('/api/lore/import', {
+          method: 'POST',
+          body: JSON.stringify({ project_id: projectId, entries: payload.entries ?? payload }),
+        })
+        queryClient.invalidateQueries({ queryKey: ['lore-entries', projectId] })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '导入失败')
       }
     }
     input.click()

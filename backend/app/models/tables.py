@@ -144,7 +144,9 @@ class LoreEntry(Base):
     __tablename__ = "lore_entries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="Concept"
     )  # Character / Location / Item / Concept / Rule / Organization / Event

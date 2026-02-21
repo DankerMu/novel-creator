@@ -49,7 +49,7 @@ def match_triggers(entry: LoreEntry, scan_text: str) -> bool:
     else:
         and_matched = False
 
-    return or_matched or and_matched
+    return or_matched and (not and_keywords or and_matched)
 
 
 def _word_in_text(word: str, text: str) -> bool:

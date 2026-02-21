@@ -212,13 +212,29 @@ def test_trigger_match_by_keyword_or():
 
 
 def test_trigger_match_and_keywords():
+    """AND keywords alone should NOT trigger — they are constraints on primary match."""
     entry = _make_entry(
         title="NoMatch",
         triggers={"keywords": [], "and_keywords": ["黑暗", "森林"]},
     )
-    assert match_triggers(entry, "黑暗的森林深处") is True
+    # No primary match (title "NoMatch" not in text, no keywords), so AND alone won't trigger
+    assert match_triggers(entry, "黑暗的森林深处") is False
     assert match_triggers(entry, "黑暗的夜晚") is False
     assert match_triggers(entry, "美丽的森林") is False
+
+
+def test_trigger_match_and_keywords_with_primary():
+    """AND keywords constrain primary match: both OR + AND must satisfy."""
+    entry = _make_entry(
+        title="NoMatch",
+        triggers={"keywords": ["魔法"], "and_keywords": ["黑暗", "森林"]},
+    )
+    # Primary keyword matches, AND keywords both present
+    assert match_triggers(entry, "黑暗的森林里施展了魔法") is True
+    # Primary matches but AND incomplete
+    assert match_triggers(entry, "魔法在黑暗中") is False
+    # AND complete but no primary match
+    assert match_triggers(entry, "黑暗的森林深处") is False
 
 
 def test_trigger_match_empty_text():
