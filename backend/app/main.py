@@ -17,11 +17,23 @@ from app.api.summary import router as summary_router
 async def lifespan(app: FastAPI):
     import os
 
+    from sqlalchemy import text
+
     from app.core.database import Base, engine
 
     os.makedirs("data", exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Lightweight column migrations for existing tables
+        for table, column, col_type in [
+            ("scenes", "scene_card_json", "TEXT"),
+        ]:
+            try:
+                await conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+                )
+            except Exception:
+                pass  # Column already exists
     yield
 
 
