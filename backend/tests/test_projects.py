@@ -151,3 +151,69 @@ async def test_404_errors(client):
     assert (await client.get("/api/chapters/999")).status_code == 404
     assert (await client.get("/api/scenes/999")).status_code == 404
     assert (await client.delete("/api/projects/999")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_scene_card_persistence(client):
+    # Setup: project → book → chapter → scene
+    resp = await client.post(
+        "/api/projects", json={"title": "卡片测试"}
+    )
+    pid = resp.json()["id"]
+    resp = await client.post(
+        "/api/books", json={"project_id": pid, "title": "卷"}
+    )
+    bid = resp.json()["id"]
+    resp = await client.post(
+        "/api/chapters", json={"book_id": bid, "title": "章"}
+    )
+    cid = resp.json()["id"]
+    resp = await client.post(
+        "/api/scenes", json={"chapter_id": cid, "title": "场景"}
+    )
+    sid = resp.json()["id"]
+
+    # Initially no card
+    resp = await client.get(f"/api/scenes/{sid}")
+    assert resp.status_code == 200
+    assert resp.json()["scene_card"] is None
+
+    # Save card
+    card = {
+        "title": "酒馆相遇",
+        "location": "龙门客栈",
+        "time": "黄昏",
+        "characters": ["李明", "张无忌"],
+        "conflict": "身份暴露",
+        "turning_point": "暗号对接",
+        "reveal": "",
+        "target_chars": 800,
+    }
+    resp = await client.put(
+        f"/api/scenes/{sid}/card",
+        json={"scene_card": card},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["scene_card"]["title"] == "酒馆相遇"
+    assert resp.json()["scene_card"]["characters"] == ["李明", "张无忌"]
+
+    # Reload and verify persistence
+    resp = await client.get(f"/api/scenes/{sid}")
+    assert resp.status_code == 200
+    assert resp.json()["scene_card"]["location"] == "龙门客栈"
+
+    # Overwrite card
+    card["title"] = "酒馆决斗"
+    resp = await client.put(
+        f"/api/scenes/{sid}/card",
+        json={"scene_card": card},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["scene_card"]["title"] == "酒馆决斗"
+
+    # 404 for non-existent scene
+    resp = await client.put(
+        "/api/scenes/99999/card",
+        json={"scene_card": card},
+    )
+    assert resp.status_code == 404

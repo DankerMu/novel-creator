@@ -82,6 +82,9 @@ class Scene(Base):
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    scene_card_json: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default=None
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )

@@ -76,8 +76,24 @@ class SceneOut(BaseModel):
     chapter_id: int
     title: str
     sort_order: int
+    scene_card: dict | None = None
     created_at: datetime
     model_config = {"from_attributes": True}
+
+
+class SceneCardData(BaseModel):
+    title: str
+    location: str
+    time: str
+    characters: list[str]
+    conflict: str
+    turning_point: str
+    reveal: str = ""
+    target_chars: int = 800
+
+
+class SceneCardUpdate(BaseModel):
+    scene_card: SceneCardData
 
 
 # --- SceneTextVersion ---
