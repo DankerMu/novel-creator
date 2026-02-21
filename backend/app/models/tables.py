@@ -1,6 +1,6 @@
 import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -23,6 +23,9 @@ class Project(Base):
         back_populates="project", cascade="all, delete-orphan"
     )
     bible_fields: Mapped[list["BibleField"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    lore_entries: Mapped[list["LoreEntry"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
 
@@ -135,3 +138,30 @@ class ChapterSummary(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
+
+
+class LoreEntry(Base):
+    __tablename__ = "lore_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="Concept"
+    )  # Character / Location / Item / Concept / Rule / Organization / Event
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    aliases_json: Mapped[str] = mapped_column(Text, default="[]")
+    content_md: Mapped[str] = mapped_column(Text, default="")
+    secrets_md: Mapped[str] = mapped_column(Text, default="")
+    triggers_json: Mapped[str] = mapped_column(
+        Text, default='{"keywords": [], "and_keywords": []}'
+    )
+    priority: Mapped[int] = mapped_column(Integer, default=5)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    project: Mapped["Project"] = relationship(back_populates="lore_entries")

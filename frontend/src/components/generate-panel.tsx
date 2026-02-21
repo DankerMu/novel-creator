@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useWorkspace } from '@/hooks/use-workspace'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -32,6 +32,18 @@ export function GeneratePanel({
   const [streamText, setStreamText] = useState('')
   const [error, setError] = useState('')
   const [hints, setHints] = useState('')
+
+  // Reset state when scene changes (but NOT on tab switch)
+  const prevSceneRef = useRef(sceneId)
+  useEffect(() => {
+    if (prevSceneRef.current !== sceneId) {
+      prevSceneRef.current = sceneId
+      setSceneCard(null)
+      setStreamText('')
+      setError('')
+      setHints('')
+    }
+  }, [sceneId])
 
   const cardMutation = useMutation({
     mutationFn: async (hints: string) => {

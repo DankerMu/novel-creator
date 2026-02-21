@@ -158,3 +158,41 @@ class BibleFieldOut(BaseModel):
     locked: bool
     updated_at: datetime
     model_config = {"from_attributes": True}
+
+
+# --- LoreEntry ---
+class LoreEntryCreate(BaseModel):
+    project_id: int
+    type: str = "Concept"
+    title: str
+    aliases: list[str] = []
+    content_md: str = ""
+    secrets_md: str = ""
+    triggers: dict = {"keywords": [], "and_keywords": []}
+    priority: int = 5
+    locked: bool = False
+
+class LoreEntryUpdate(BaseModel):
+    type: str | None = None
+    title: str | None = None
+    aliases: list[str] | None = None
+    content_md: str | None = None
+    secrets_md: str | None = None
+    triggers: dict | None = None
+    priority: int | None = None
+    locked: bool | None = None
+
+class LoreEntryOut(BaseModel):
+    id: int
+    project_id: int
+    type: str
+    title: str
+    aliases: list[str]
+    content_md: str
+    secrets_md: str
+    triggers: dict
+    priority: int
+    locked: bool
+    created_at: datetime
+    updated_at: datetime
+    model_config = {"from_attributes": True}

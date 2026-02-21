@@ -3,6 +3,7 @@ from app.models.tables import (  # noqa: F401
     Book,
     Chapter,
     ChapterSummary,
+    LoreEntry,
     Project,
     Scene,
     SceneTextVersion,
