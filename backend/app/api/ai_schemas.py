@@ -1,5 +1,7 @@
 """AI generation schemas: SceneCard, SceneDraft, Context Pack."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -58,9 +60,8 @@ class RewriteRequest(BaseModel):
         default=1500, ge=100, le=50000,
         description="目标字数",
     )
-    mode: str = Field(
+    mode: Literal["expand", "compress"] = Field(
         description="重写模式: expand 或 compress",
-        pattern="^(expand|compress)$",
     )
 
 
