@@ -95,7 +95,7 @@ async def test_character_status_conflict(client, db_session):
     assert len(char_conflicts) >= 1
     conflict = char_conflicts[0]
     assert conflict["severity"] == "high"
-    assert conflict["confidence"] == 1.0
+    assert conflict["confidence"] == 0.6  # no death_location → lower confidence
     assert conflict["source"] == "rule"
     assert "Lin Yuan" in conflict["message"]
     assert len(conflict["evidence"]) >= 1
@@ -289,7 +289,7 @@ async def test_api_endpoint_custom_ngram_params(client, db_session):
     # Very high threshold: no repetition flagged
     resp = await client.post(
         "/api/qa/check",
-        json={"project_id": pid, "ngram_n": 4, "ngram_threshold": 100},
+        json={"project_id": pid, "ngram_n": 4, "ngram_threshold": 20},
     )
     assert resp.status_code == 200
     assert all(r["type"] != "repetition" for r in resp.json())
@@ -316,3 +316,140 @@ async def test_api_possession_conflict_via_endpoint(client, db_session):
     poss = [r for r in resp.json() if r["type"] == "possession"]
     assert len(poss) >= 1
     assert "Golden Key" in poss[0]["message"]
+
+
+# ---------- Test: timeline ----------
+
+@pytest.mark.asyncio
+async def test_timeline_conflict(client, db_session):
+    """Events with narrative_day ordered inconsistently with chapter order are flagged."""
+    from app.models.tables import KGProposal
+
+    pid = await _setup_project(client)
+    bid = await _setup_book(client, pid)
+
+    ch1 = await _setup_chapter(client, bid, sort_order=0)
+    ch2 = await _setup_chapter(client, bid, sort_order=1)
+
+    # Event in ch1 has narrative_day=10, event in ch2 has narrative_day=5
+    # This is a timeline conflict: later chapter has earlier narrative_day
+    proposal1 = KGProposal(
+        project_id=pid,
+        chapter_id=ch1,
+        category="entity",
+        data_json=json.dumps({"narrative_day": 10, "name": "Battle of Dawn"}),
+        status="auto_approved",
+        confidence=0.95,
+        evidence_location=f"chapter:{ch1}",
+    )
+    proposal2 = KGProposal(
+        project_id=pid,
+        chapter_id=ch2,
+        category="entity",
+        data_json=json.dumps({"narrative_day": 5, "name": "Festival Preparation"}),
+        status="auto_approved",
+        confidence=0.95,
+        evidence_location=f"chapter:{ch2}",
+    )
+    db_session.add_all([proposal1, proposal2])
+    await db_session.flush()
+
+    results = await run_consistency_check(db_session, pid)
+    timeline_conflicts = [r for r in results if r["type"] == "timeline"]
+    assert len(timeline_conflicts) >= 1
+    c = timeline_conflicts[0]
+    assert c["severity"] == "medium"
+    assert c["confidence"] == 1.0
+    assert c["source"] == "rule"
+    assert "narrative_day" in c["message"]
+
+
+@pytest.mark.asyncio
+async def test_timeline_no_conflict(client, db_session):
+    """Events with narrative_day in correct order produce no conflict."""
+    from app.models.tables import KGProposal
+
+    pid = await _setup_project(client)
+    bid = await _setup_book(client, pid)
+
+    ch1 = await _setup_chapter(client, bid, sort_order=0)
+    ch2 = await _setup_chapter(client, bid, sort_order=1)
+
+    # Correct order: ch1 has narrative_day=5, ch2 has narrative_day=10
+    proposal1 = KGProposal(
+        project_id=pid,
+        chapter_id=ch1,
+        category="entity",
+        data_json=json.dumps({"narrative_day": 5, "name": "Morning Meeting"}),
+        status="auto_approved",
+        confidence=0.95,
+        evidence_location=f"chapter:{ch1}",
+    )
+    proposal2 = KGProposal(
+        project_id=pid,
+        chapter_id=ch2,
+        category="entity",
+        data_json=json.dumps({"narrative_day": 10, "name": "Evening Banquet"}),
+        status="auto_approved",
+        confidence=0.95,
+        evidence_location=f"chapter:{ch2}",
+    )
+    db_session.add_all([proposal1, proposal2])
+    await db_session.flush()
+
+    results = await run_consistency_check(db_session, pid)
+    timeline_conflicts = [r for r in results if r["type"] == "timeline"]
+    assert timeline_conflicts == []
+
+
+# ---------- Test: plot_thread ----------
+
+@pytest.mark.asyncio
+async def test_plot_thread_conflict(client, db_session):
+    """Resolved plot thread referenced in later scene text is flagged."""
+    pid = await _setup_project(client)
+    bid = await _setup_book(client, pid)
+
+    ch1 = await _setup_chapter(client, bid, sort_order=0)
+    await _setup_scene_with_text(client, ch1, "The mystery of the stolen crown was solved.")
+
+    ch2 = await _setup_chapter(client, bid, sort_order=1)
+    await _setup_scene_with_text(
+        client, ch2,
+        "The mystery of the stolen crown continues to puzzle everyone.",
+    )
+
+    node = _make_node(pid, "PlotThread", "mystery of the stolen crown", {"status": "resolved"})
+    db_session.add(node)
+    await db_session.flush()
+
+    results = await run_consistency_check(db_session, pid)
+    plot_conflicts = [r for r in results if r["type"] == "plot_thread"]
+    assert len(plot_conflicts) >= 1
+    c = plot_conflicts[0]
+    assert c["severity"] == "medium"
+    assert c["confidence"] == 0.6  # no resolved_location → lower confidence
+    assert c["source"] == "rule"
+    assert "mystery of the stolen crown" in c["message"]
+
+
+@pytest.mark.asyncio
+async def test_plot_thread_no_conflict(client, db_session):
+    """Resolved plot thread not mentioned in later scenes produces no conflict."""
+    pid = await _setup_project(client)
+    bid = await _setup_book(client, pid)
+
+    ch1 = await _setup_chapter(client, bid, sort_order=0)
+    await _setup_scene_with_text(client, ch1, "The ancient relic was finally recovered.")
+
+    ch2 = await _setup_chapter(client, bid, sort_order=1)
+    await _setup_scene_with_text(client, ch2, "A new adventure begins in the northern lands.")
+
+    # Use a different name that won't appear in ch2 text
+    node = _make_node(pid, "PlotThread", "quest for the golden crown", {"status": "resolved"})
+    db_session.add(node)
+    await db_session.flush()
+
+    results = await run_consistency_check(db_session, pid)
+    plot_conflicts = [r for r in results if r["type"] == "plot_thread"]
+    assert plot_conflicts == []

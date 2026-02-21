@@ -3,13 +3,13 @@
 import json
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tables import Book, Chapter, KGEdge, KGNode, KGProposal, Scene, SceneTextVersion
 
 
-def _loads(raw: str, default=None):
+def _safe_loads(raw: str, default=None):
     if default is None:
         default = {}
     try:
@@ -24,15 +24,12 @@ def _extract_ngrams(text: str, n: int) -> list[str]:
     if len(tokens) < n:
         # fall back to character n-grams for dense Chinese text
         chars = [c for c in text if c.strip()]
-        return ["" .join(chars[i : i + n]) for i in range(len(chars) - n + 1)]
+        return ["".join(chars[i : i + n]) for i in range(len(chars) - n + 1)]
     return [" ".join(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
 
 
 async def _build_scene_index(db: AsyncSession, project_id: int) -> list[dict]:
     """Return ordered list of {chapter_sort, chapter_id, scene_id, scene_sort, text, location}."""
-    # Subquery: latest version per scene
-    from sqlalchemy import func
-
     latest = (
         select(
             SceneTextVersion.scene_id,
@@ -98,7 +95,7 @@ async def _check_character_status(
 
     dead_chars: list[tuple[str, str]] = []  # (name, death_location or "")
     for char in characters:
-        props = _loads(char.properties_json, {})
+        props = _safe_loads(char.properties_json, {})
         status = props.get("status", "") or props.get("Status", "")
         if str(status).lower() == "dead":
             death_loc = props.get("death_location", "")
@@ -126,6 +123,8 @@ async def _check_character_status(
         ]
 
         if reappearances:
+            has_loc = death_idx is not None
+            conf = 1.0 if has_loc else 0.6
             evidence = []
             if death_loc:
                 evidence.append(f"Character '{name}' marked dead at {death_loc}")
@@ -137,7 +136,7 @@ async def _check_character_status(
                 {
                     "type": "character_status",
                     "severity": "high",
-                    "confidence": 1.0,
+                    "confidence": conf,
                     "source": "rule",
                     "message": f"Dead character '{name}' appears in later scene text.",
                     "evidence": evidence,
@@ -178,7 +177,7 @@ async def _check_timeline(db: AsyncSession, project_id: int) -> list[dict]:
     events: list[dict] = []  # {name, narrative_day, chapter_id, chapter_sort, location}
 
     for p in proposals:
-        data = _loads(p.data_json, {})
+        data = _safe_loads(p.data_json, {})
         day = data.get("narrative_day") or data.get("properties", {}).get("narrative_day")
         if day is not None:
             try:
@@ -197,7 +196,7 @@ async def _check_timeline(db: AsyncSession, project_id: int) -> list[dict]:
             )
 
     for e in edges:
-        props = _loads(e.properties_json, {})
+        props = _safe_loads(e.properties_json, {})
         day = props.get("narrative_day")
         if day is not None:
             try:
@@ -265,19 +264,30 @@ async def _check_possession(db: AsyncSession, project_id: int) -> list[dict]:
     for e in edges:
         ownership[e.target_node_id].append(e.source_node_id)
 
-    # Fetch node names for conflicting entries
+    # Batch-fetch all node names to avoid N+1 queries
+    all_ids: set[int] = set()
+    for target_id, owners in ownership.items():
+        if len(owners) > 1:
+            all_ids.add(target_id)
+            all_ids.update(owners)
+
+    if not all_ids:
+        return []
+
+    node_result = await db.execute(
+        select(KGNode).where(KGNode.id.in_(all_ids))
+    )
+    node_map = {n.id: n.name for n in node_result.scalars().all()}
+
     conflicts = []
     for target_id, owners in ownership.items():
         if len(owners) <= 1:
             continue
 
-        target_node = await db.get(KGNode, target_id)
-        item_name = target_node.name if target_node else str(target_id)
-
-        owner_names = []
-        for oid in owners:
-            node = await db.get(KGNode, oid)
-            owner_names.append(node.name if node else str(oid))
+        item_name = node_map.get(target_id, str(target_id))
+        owner_names = [
+            node_map.get(oid, str(oid)) for oid in owners
+        ]
 
         conflicts.append(
             {
@@ -317,7 +327,7 @@ async def _check_plot_thread(db: AsyncSession, project_id: int, scenes: list[dic
 
     conflicts = []
     for node in nodes:
-        props = _loads(node.properties_json, {})
+        props = _safe_loads(node.properties_json, {})
         status = str(props.get("status", "") or props.get("Status", "")).lower()
         if status != "resolved":
             continue
@@ -338,6 +348,8 @@ async def _check_plot_thread(db: AsyncSession, project_id: int, scenes: list[dic
         ]
 
         if reappearances:
+            has_loc = resolved_idx is not None
+            conf = 1.0 if has_loc else 0.6
             evidence = [f"Plot thread '{node.name}' marked resolved"]
             if resolved_loc:
                 evidence.append(f"Resolved at {resolved_loc}")
@@ -347,7 +359,7 @@ async def _check_plot_thread(db: AsyncSession, project_id: int, scenes: list[dic
                 {
                     "type": "plot_thread",
                     "severity": "medium",
-                    "confidence": 1.0,
+                    "confidence": conf,
                     "source": "rule",
                     "message": (
                         f"Resolved plot thread '{node.name}' is referenced again in later scenes."
