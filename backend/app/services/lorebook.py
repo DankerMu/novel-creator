@@ -1,7 +1,6 @@
 """Lorebook service: trigger matching and context injection."""
 
 import json
-import re
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

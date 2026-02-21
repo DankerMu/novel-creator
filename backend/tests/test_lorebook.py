@@ -1,7 +1,6 @@
 import pytest
 
-from app.services.lorebook import match_triggers, _truncate_to_sentence
-
+from app.services.lorebook import _truncate_to_sentence, match_triggers
 
 # ==================== CRUD ====================
 
