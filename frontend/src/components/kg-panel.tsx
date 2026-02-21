@@ -112,15 +112,20 @@ export function KGPanel() {
     enabled: !!projectId,
   })
 
+  const [successMsg, setSuccessMsg] = useState('')
   const extractMutation = useMutation({
     mutationFn: () =>
-      apiFetch('/api/kg/extract', {
+      apiFetch<KGProposal[]>('/api/kg/extract', {
         method: 'POST',
         body: JSON.stringify({ chapter_id: selectedChapterId, project_id: projectId }),
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidateAll()
       setError('')
+      setStatusFilter('all')
+      const count = Array.isArray(data) ? data.length : 0
+      setSuccessMsg(count > 0 ? `抽取完成，发现 ${count} 条知识` : '抽取完成，未发现新知识')
+      setTimeout(() => setSuccessMsg(''), 5000)
     },
     onError: (e) => setError(e instanceof Error ? e.message : '抽取失败'),
   })
@@ -225,6 +230,9 @@ export function KGPanel() {
     <div className="space-y-3">
       {error && (
         <div className="text-xs text-red-600 bg-red-50 p-2 rounded">{error}</div>
+      )}
+      {successMsg && (
+        <div className="text-xs text-green-700 bg-green-50 p-2 rounded">{successMsg}</div>
       )}
 
       {/* Header row */}

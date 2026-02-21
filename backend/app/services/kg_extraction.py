@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,32 +15,65 @@ logger = logging.getLogger(__name__)
 
 _EXTRACTION_SYSTEM = """\
 You are a knowledge graph extractor for a novel.
-Given chapter text, extract entities and relations as a JSON array.
+Given chapter text, extract entities and relations.
+Return a JSON object with a single key "items" containing an array.
 Each item must be one of:
 
   Entity:
   {"category": "entity", "label": "Character|Location|Item|Event|Concept|Organization",
    "name": "<name>", "properties": {<key>: <value>},
-   "confidence": 0.0-1.0, "evidence": "<verbatim snippet>"}
+   "confidence": 0.0-1.0, "evidence": "<short snippet>"}
 
   Relation:
   {"category": "relation", "source": "<name>", "target": "<name>",
-   "relation": "<verb_phrase>", "confidence": 0.0-1.0, "evidence": "<verbatim snippet>"}
+   "relation": "<verb_phrase>", "confidence": 0.0-1.0, "evidence": "<short snippet>"}
 
 Rules:
-- Output ONLY the JSON array, no markdown fences.
+- Output ONLY valid JSON: {"items": [...]}
+- All strings must use proper JSON escaping (escape inner quotes with backslash).
 - Use consistent names (same spelling for the same entity).
 - confidence: 0.9+ only when the fact is stated explicitly.
+- Keep evidence short (under 30 chars) to avoid quoting issues.
 - Skip obvious/generic facts; focus on story-specific ones.
 """
 
 
 def _safe_loads_list(raw: str) -> list:
     """Parse JSON array from LLM output, return [] on failure."""
+    # Strip markdown fences and preamble text
+    m = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+    if m:
+        raw = m.group(1).strip()
+    else:
+        # Find first JSON structure
+        idx_arr = raw.find("[")
+        idx_obj = raw.find("{")
+        idx = -1
+        if idx_arr >= 0 and idx_obj >= 0:
+            idx = min(idx_arr, idx_obj)
+        elif idx_arr >= 0:
+            idx = idx_arr
+        elif idx_obj >= 0:
+            idx = idx_obj
+        if idx > 0:
+            raw = raw[idx:]
+
+    # Fix unescaped ASCII double quotes used as Chinese quotation marks
+    # Only match CJK unified ideographs, exclude fullwidth punctuation
+    raw = re.sub(
+        r'(?<=[\u4e00-\u9fff\u3400-\u4dbf])"(?=[\u4e00-\u9fff\u3400-\u4dbf])',
+        r'\\"',
+        raw,
+    )
+
     try:
         data = json.loads(raw)
+        # Support {"items": [...]} wrapper
+        if isinstance(data, dict) and "items" in data:
+            return data["items"] if isinstance(data["items"], list) else []
         return data if isinstance(data, list) else []
     except (json.JSONDecodeError, TypeError):
+        logger.warning("Failed to parse KG extraction JSON: %s", raw[:200])
         return []
 
 
@@ -124,7 +158,9 @@ async def extract_kg_from_chapter(
     ]
 
     try:
-        response = await call_llm(messages)
+        response = await call_llm(
+            messages, response_format={"type": "json_object"}
+        )
         raw_content = response.choices[0].message.content or ""
     except Exception as exc:  # noqa: BLE001
         logger.error("LLM call failed during KG extraction: %s", exc)
