@@ -304,7 +304,7 @@ async def test_approve_proposal(client):
 
     # Approve it
     resp = await client.post(
-        f"/api/kg/proposals/{prop_id}/approve"
+        f"/api/kg/proposals/{prop_id}/approve?project_id={pid}"
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "user_approved"
@@ -339,7 +339,7 @@ async def test_reject_proposal(client):
     prop_id = pending[0]["id"]
 
     resp = await client.post(
-        f"/api/kg/proposals/{prop_id}/reject"
+        f"/api/kg/proposals/{prop_id}/reject?project_id={pid}"
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "rejected"
@@ -348,7 +348,7 @@ async def test_reject_proposal(client):
 @pytest.mark.asyncio
 async def test_approve_404(client):
     resp = await client.post(
-        "/api/kg/proposals/9999/approve"
+        "/api/kg/proposals/9999/approve?project_id=1"
     )
     assert resp.status_code == 404
 
@@ -356,7 +356,7 @@ async def test_approve_404(client):
 @pytest.mark.asyncio
 async def test_reject_404(client):
     resp = await client.post(
-        "/api/kg/proposals/9999/reject"
+        "/api/kg/proposals/9999/reject?project_id=1"
     )
     assert resp.status_code == 404
 
@@ -391,7 +391,7 @@ async def test_bulk_approve(client):
     pending_ids = [p["id"] for p in resp.json()]
 
     resp = await client.post(
-        "/api/kg/proposals/bulk-approve",
+        f"/api/kg/proposals/bulk-approve?project_id={pid}",
         json={"ids": pending_ids},
     )
     assert resp.status_code == 200
@@ -427,7 +427,7 @@ async def test_bulk_reject(client):
     pending_ids = [p["id"] for p in resp.json()]
 
     resp = await client.post(
-        "/api/kg/proposals/bulk-reject",
+        f"/api/kg/proposals/bulk-reject?project_id={pid}",
         json={"ids": pending_ids},
     )
     assert resp.status_code == 200
@@ -439,10 +439,10 @@ async def test_bulk_reject(client):
 @pytest.mark.asyncio
 async def test_bulk_empty_ids(client):
     resp = await client.post(
-        "/api/kg/proposals/bulk-approve",
+        "/api/kg/proposals/bulk-approve?project_id=1",
         json={"ids": []},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 422  # Pydantic min_length=1 validation
 
 
 # ==================== Graph Query ====================

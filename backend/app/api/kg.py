@@ -3,6 +3,7 @@
 import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,17 @@ from app.services.graph_service import SQLiteGraphAdapter, _safe_loads
 from app.services.kg_extraction import extract_kg_from_chapter
 
 router = APIRouter(prefix="/api", tags=["knowledge-graph"])
+
+
+# --- Request models ---
+
+class ExtractRequest(BaseModel):
+    chapter_id: int
+    project_id: int
+
+
+class BulkIdsRequest(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=200)
 
 
 def _safe_loads_dict(raw: str) -> dict:
@@ -74,19 +86,17 @@ async def _approve_proposal(
             properties=item.get("properties", {}),
         )
     elif category == "relation":
-        source_id = await graph.upsert_node(
+        source_id = await graph.ensure_node(
             project_id=proposal.project_id,
-            label="Concept",
             name=item.get("source", ""),
-            properties={},
+            fallback_label="Concept",
         )
-        target_id = await graph.upsert_node(
+        target_id = await graph.ensure_node(
             project_id=proposal.project_id,
-            label="Concept",
             name=item.get("target", ""),
-            properties={},
+            fallback_label="Concept",
         )
-        await graph.add_edge(
+        await graph.upsert_edge(
             project_id=proposal.project_id,
             source_id=source_id,
             target_id=target_id,
@@ -95,21 +105,19 @@ async def _approve_proposal(
         )
 
     proposal.status = new_status
-    proposal.reviewed_at = datetime.datetime.utcnow()
+    proposal.reviewed_at = datetime.datetime.now(datetime.UTC)
 
 
 # ---------- Extraction ----------
 
 @router.post("/kg/extract", response_model=list[KGProposalOut])
 async def trigger_extraction(
-    body: dict, db: AsyncSession = Depends(get_db)
+    body: ExtractRequest, db: AsyncSession = Depends(get_db)
 ):
-    """Trigger KG extraction for a chapter. Body: {chapter_id, project_id}"""
-    chapter_id = body.get("chapter_id")
-    project_id = body.get("project_id")
-    if not chapter_id or not project_id:
-        raise HTTPException(400, "chapter_id and project_id are required")
-    proposals = await extract_kg_from_chapter(db, chapter_id, project_id)
+    """Trigger KG extraction for a chapter."""
+    proposals = await extract_kg_from_chapter(
+        db, body.chapter_id, body.project_id
+    )
     return [_proposal_to_out(p) for p in proposals]
 
 
@@ -125,7 +133,12 @@ async def list_proposals(
     """List KG proposals with optional status / category filters."""
     stmt = select(KGProposal).where(KGProposal.project_id == project_id)
     if status:
-        stmt = stmt.where(KGProposal.status == status)
+        if status == "approved":
+            stmt = stmt.where(
+                KGProposal.status.in_(["auto_approved", "user_approved"])
+            )
+        else:
+            stmt = stmt.where(KGProposal.status == status)
     if category:
         stmt = stmt.where(KGProposal.category == category)
     stmt = stmt.order_by(KGProposal.confidence.desc(), KGProposal.id)
@@ -138,14 +151,16 @@ async def list_proposals(
 
 @router.post("/kg/proposals/bulk-approve", response_model=list[KGProposalOut])
 async def bulk_approve_proposals(
-    body: dict, db: AsyncSession = Depends(get_db)
+    body: BulkIdsRequest,
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
 ):
-    """Bulk approve proposals. Body: {ids: [...]}"""
-    ids: list[int] = body.get("ids", [])
-    if not ids:
-        raise HTTPException(400, "ids list is required")
+    """Bulk approve proposals scoped to project_id."""
     result = await db.execute(
-        select(KGProposal).where(KGProposal.id.in_(ids))
+        select(KGProposal).where(
+            KGProposal.id.in_(body.ids),
+            KGProposal.project_id == project_id,
+        )
     )
     proposals = result.scalars().all()
     for p in proposals:
@@ -159,17 +174,19 @@ async def bulk_approve_proposals(
 
 @router.post("/kg/proposals/bulk-reject", response_model=list[KGProposalOut])
 async def bulk_reject_proposals(
-    body: dict, db: AsyncSession = Depends(get_db)
+    body: BulkIdsRequest,
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
 ):
-    """Bulk reject proposals. Body: {ids: [...]}"""
-    ids: list[int] = body.get("ids", [])
-    if not ids:
-        raise HTTPException(400, "ids list is required")
+    """Bulk reject proposals scoped to project_id."""
     result = await db.execute(
-        select(KGProposal).where(KGProposal.id.in_(ids))
+        select(KGProposal).where(
+            KGProposal.id.in_(body.ids),
+            KGProposal.project_id == project_id,
+        )
     )
     proposals = result.scalars().all()
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC)
     for p in proposals:
         if p.status == "pending":
             p.status = "rejected"
@@ -182,11 +199,13 @@ async def bulk_reject_proposals(
 
 @router.post("/kg/proposals/{proposal_id}/approve", response_model=KGProposalOut)
 async def approve_proposal(
-    proposal_id: int, db: AsyncSession = Depends(get_db)
+    proposal_id: int,
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
 ):
-    """Approve a single pending proposal."""
+    """Approve a single pending proposal (scoped to project)."""
     p = await db.get(KGProposal, proposal_id)
-    if not p:
+    if not p or p.project_id != project_id:
         raise HTTPException(404, "Proposal not found")
     await _approve_proposal(p, db, "user_approved")
     await db.flush()
@@ -196,14 +215,16 @@ async def approve_proposal(
 
 @router.post("/kg/proposals/{proposal_id}/reject", response_model=KGProposalOut)
 async def reject_proposal(
-    proposal_id: int, db: AsyncSession = Depends(get_db)
+    proposal_id: int,
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
 ):
-    """Reject a single pending proposal."""
+    """Reject a single pending proposal (scoped to project)."""
     p = await db.get(KGProposal, proposal_id)
-    if not p:
+    if not p or p.project_id != project_id:
         raise HTTPException(404, "Proposal not found")
     p.status = "rejected"
-    p.reviewed_at = datetime.datetime.utcnow()
+    p.reviewed_at = datetime.datetime.now(datetime.UTC)
     await db.flush()
     await db.refresh(p)
     return _proposal_to_out(p)

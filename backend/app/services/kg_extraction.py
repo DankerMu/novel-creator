@@ -81,19 +81,17 @@ async def _approve_relation(
     graph: SQLiteGraphAdapter, project_id: int, item: dict
 ) -> None:
     """Create nodes for source/target then add edge for an auto-approved relation."""
-    source_id = await graph.upsert_node(
+    source_id = await graph.ensure_node(
         project_id=project_id,
-        label="Concept",
         name=item.get("source", ""),
-        properties={},
+        fallback_label="Concept",
     )
-    target_id = await graph.upsert_node(
+    target_id = await graph.ensure_node(
         project_id=project_id,
-        label="Concept",
         name=item.get("target", ""),
-        properties={},
+        fallback_label="Concept",
     )
-    await graph.add_edge(
+    await graph.upsert_edge(
         project_id=project_id,
         source_id=source_id,
         target_id=target_id,

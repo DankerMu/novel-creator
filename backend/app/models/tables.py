@@ -181,6 +181,9 @@ class LoreEntry(Base):
 
 class KGNode(Base):
     __tablename__ = "kg_nodes"
+    __table_args__ = (
+        UniqueConstraint("project_id", "label", "name", name="uq_kgnode_proj_label_name"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     project_id: Mapped[int] = mapped_column(
@@ -199,16 +202,22 @@ class KGNode(Base):
 
 class KGEdge(Base):
     __tablename__ = "kg_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "source_node_id", "target_node_id", "relation",
+            name="uq_kgedge_proj_src_tgt_rel",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     project_id: Mapped[int] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
     source_node_id: Mapped[int] = mapped_column(
-        ForeignKey("kg_nodes.id", ondelete="CASCADE")
+        ForeignKey("kg_nodes.id", ondelete="CASCADE"), index=True
     )
     target_node_id: Mapped[int] = mapped_column(
-        ForeignKey("kg_nodes.id", ondelete="CASCADE")
+        ForeignKey("kg_nodes.id", ondelete="CASCADE"), index=True
     )
     relation: Mapped[str] = mapped_column(String(100), nullable=False)
     properties_json: Mapped[str] = mapped_column(Text, default="{}")
@@ -225,12 +234,14 @@ class KGProposal(Base):
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
     chapter_id: Mapped[int] = mapped_column(
-        ForeignKey("chapters.id", ondelete="CASCADE")
+        ForeignKey("chapters.id", ondelete="CASCADE"), index=True
     )
     category: Mapped[str] = mapped_column(String(50), nullable=False)
     data_json: Mapped[str] = mapped_column(Text, default="{}")
     confidence: Mapped[float] = mapped_column(Float, index=True)
-    status: Mapped[str] = mapped_column(String(20), default="pending")
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending", index=True
+    )
     evidence_text: Mapped[str] = mapped_column(Text, default="")
     evidence_location: Mapped[str] = mapped_column(String(200), default="")
     reviewed_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)

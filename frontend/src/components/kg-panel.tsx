@@ -3,8 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { useWorkspace } from '@/hooks/use-workspace'
-import { useEffect, useState } from 'react'
-import type { KGProposal } from '@/lib/types'
+import { useEffect, useMemo, useState } from 'react'
+import type { KGProposal, KGStatus } from '@/lib/types'
 
 // Status display mapping
 const STATUS_LABELS: Record<string, string> = {
@@ -95,6 +95,10 @@ export function KGPanel() {
       : undefined
 
   const queryKey = ['kg-proposals', projectId, statusFilter, categoryFilter]
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['kg-proposals', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['kg-proposals-all', projectId] })
+  }
 
   const { data: proposals, isLoading } = useQuery({
     queryKey,
@@ -115,7 +119,7 @@ export function KGPanel() {
         body: JSON.stringify({ chapter_id: selectedChapterId, project_id: projectId }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['kg-proposals', projectId] })
+      invalidateAll()
       setError('')
     },
     onError: (e) => setError(e instanceof Error ? e.message : '抽取失败'),
@@ -123,47 +127,55 @@ export function KGPanel() {
 
   const approveMutation = useMutation({
     mutationFn: (id: number) =>
-      apiFetch(`/api/kg/proposals/${id}/approve`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kg-proposals', projectId] }),
+      apiFetch(`/api/kg/proposals/${id}/approve?project_id=${projectId}`, { method: 'POST' }),
+    onSuccess: invalidateAll,
     onError: (e) => setError(e instanceof Error ? e.message : '操作失败'),
   })
 
   const rejectMutation = useMutation({
     mutationFn: (id: number) =>
-      apiFetch(`/api/kg/proposals/${id}/reject`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kg-proposals', projectId] }),
+      apiFetch(`/api/kg/proposals/${id}/reject?project_id=${projectId}`, { method: 'POST' }),
+    onSuccess: invalidateAll,
     onError: (e) => setError(e instanceof Error ? e.message : '操作失败'),
   })
 
   const bulkApproveMutation = useMutation({
     mutationFn: (ids: number[]) =>
-      apiFetch('/api/kg/proposals/bulk-approve', {
+      apiFetch(`/api/kg/proposals/bulk-approve?project_id=${projectId}`, {
         method: 'POST',
         body: JSON.stringify({ ids }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kg-proposals', projectId] }),
+    onSuccess: invalidateAll,
     onError: (e) => setError(e instanceof Error ? e.message : '批量操作失败'),
   })
 
   const bulkRejectMutation = useMutation({
     mutationFn: (ids: number[]) =>
-      apiFetch('/api/kg/proposals/bulk-reject', {
+      apiFetch(`/api/kg/proposals/bulk-reject?project_id=${projectId}`, {
         method: 'POST',
         body: JSON.stringify({ ids }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kg-proposals', projectId] }),
+    onSuccess: invalidateAll,
     onError: (e) => setError(e instanceof Error ? e.message : '批量操作失败'),
   })
 
   const list = proposals ?? []
   const pendingIds = list.filter((p) => p.status === 'pending').map((p) => p.id)
 
-  // Stats counts from all proposals irrespective of filter (use current list as approximation)
-  const stats = {
-    pending: list.filter((p) => p.status === 'pending').length,
-    approved: list.filter((p) => p.status === 'auto_approved' || p.status === 'user_approved').length,
-    rejected: list.filter((p) => p.status === 'rejected').length,
-  }
+  // Stats from unfiltered query to show accurate global counts
+  const { data: allProposals } = useQuery({
+    queryKey: ['kg-proposals-all', projectId],
+    queryFn: () => apiFetch<KGProposal[]>(`/api/kg/proposals?project_id=${projectId}`),
+    enabled: !!projectId,
+  })
+  const stats = useMemo(() => {
+    const all = allProposals ?? []
+    return {
+      pending: all.filter((p) => p.status === 'pending').length,
+      approved: all.filter((p) => p.status === 'auto_approved' || p.status === 'user_approved').length,
+      rejected: all.filter((p) => p.status === 'rejected').length,
+    }
+  }, [allProposals])
 
   // Keyboard navigation
   useEffect(() => {
@@ -191,10 +203,15 @@ export function KGPanel() {
     return () => window.removeEventListener('keydown', handler)
   }, [list, selectedIndex, approveMutation, rejectMutation])
 
-  // Reset selection index when list changes
+  // Reset selection index when filter changes
   useEffect(() => {
     setSelectedIndex(0)
   }, [statusFilter, categoryFilter, projectId])
+
+  // Clamp selectedIndex when list shrinks (e.g. after approve/reject)
+  useEffect(() => {
+    setSelectedIndex((i) => (list.length === 0 ? 0 : Math.min(i, list.length - 1)))
+  }, [list.length])
 
   if (!projectId) return null
 
