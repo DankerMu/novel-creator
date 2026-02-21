@@ -157,9 +157,14 @@ export default function WorkspacePage() {
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'generate' ? '' : 'hidden'}`}>
             {selectedSceneId && selectedChapterId ? (
               <GeneratePanel
+                key={selectedSceneId}
                 sceneId={selectedSceneId}
                 chapterId={selectedChapterId}
-                onDraftComplete={() => {
+                onDraftComplete={async (text) => {
+                  await apiFetch(`/api/scenes/${selectedSceneId}/versions`, {
+                    method: 'POST',
+                    body: JSON.stringify({ content_md: text, created_by: 'ai' }),
+                  })
                   queryClient.invalidateQueries({
                     queryKey: ['scene-version', selectedSceneId],
                   })
@@ -172,7 +177,7 @@ export default function WorkspacePage() {
 
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'summary' ? '' : 'hidden'}`}>
             {selectedChapterId ? (
-              <SummaryPanel chapterId={selectedChapterId} />
+              <SummaryPanel key={selectedChapterId} chapterId={selectedChapterId} />
             ) : (
               <EmptyHint text="选择一个章节以查看摘要" />
             )}

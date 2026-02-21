@@ -17,6 +17,10 @@ body {
 }
 
 /* Scrollbar styling for sidebar panels */
+aside {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
 aside::-webkit-scrollbar {
   width: 4px;
 }

@@ -88,12 +88,16 @@ export function GeneratePanel({
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
-          const data = JSON.parse(line.slice(6))
-          if (data.done) {
-            onDraftComplete(accumulated)
-          } else if (data.text) {
-            accumulated += data.text
-            setStreamText(accumulated)
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.done) {
+              onDraftComplete(accumulated)
+            } else if (data.text) {
+              accumulated += data.text
+              setStreamText(accumulated)
+            }
+          } catch {
+            continue
           }
         }
       }
@@ -155,7 +159,7 @@ export function GeneratePanel({
           <FieldArea label="转折" value={sceneCard.turning_point}
             onChange={(v) => setSceneCard({ ...sceneCard, turning_point: v })} />
           <Field label="目标字数" value={String(sceneCard.target_chars)}
-            onChange={(v) => setSceneCard({ ...sceneCard, target_chars: parseInt(v) || 800 })} />
+            onChange={(v) => setSceneCard({ ...sceneCard, target_chars: Math.max(100, Math.min(parseInt(v) || 800, 5000)) })} />
         </div>
       )}
 
