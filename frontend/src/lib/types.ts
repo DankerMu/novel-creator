@@ -67,3 +67,18 @@ export interface ProjectTree {
   title: string
   books: BookTreeNode[]
 }
+
+export interface LoreEntry {
+  id: number
+  project_id: number
+  type: string
+  title: string
+  aliases: string[]
+  content_md: string
+  secrets_md: string
+  keywords: string[]
+  priority: number
+  locked: boolean
+  created_at: string
+  updated_at: string
+}

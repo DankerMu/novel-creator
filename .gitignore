@@ -35,6 +35,7 @@ venv/
 env/
 ENV/
 .venv
+uv.lock
 
 # TypeScript/Node.js
 node_modules/
@@ -68,6 +69,8 @@ credentials.json
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 

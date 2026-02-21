@@ -55,6 +55,13 @@ export function SummaryPanel({
       setEditEntities(summary.entities.join('、'))
       setEditPlotThreads(summary.plot_threads.join('\n'))
       setDirty(false)
+    } else {
+      setEditSummary('')
+      setEditKeyEvents('')
+      setEditKeywords('')
+      setEditEntities('')
+      setEditPlotThreads('')
+      setDirty(false)
     }
   }, [summary])
 

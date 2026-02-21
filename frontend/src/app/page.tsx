@@ -10,9 +10,10 @@ import { BiblePanel } from '@/components/bible-panel'
 import { GeneratePanel } from '@/components/generate-panel'
 import { SummaryPanel } from '@/components/summary-panel'
 import { ExportPanel } from '@/components/export-panel'
+import { LorePanel } from '@/components/lore-panel'
 import { useMemo, useState } from 'react'
 
-type RightTab = 'generate' | 'summary' | 'bible' | 'export'
+type RightTab = 'generate' | 'summary' | 'bible' | 'lore' | 'export'
 
 export default function WorkspacePage() {
   const {
@@ -98,6 +99,7 @@ export default function WorkspacePage() {
     { key: 'generate', label: 'AI 生成' },
     { key: 'summary', label: '摘要' },
     { key: 'bible', label: '设定' },
+    { key: 'lore', label: 'Lore' },
     { key: 'export', label: '导出' },
   ]
 
@@ -157,7 +159,6 @@ export default function WorkspacePage() {
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'generate' ? '' : 'hidden'}`}>
             {selectedSceneId && selectedChapterId ? (
               <GeneratePanel
-                key={selectedSceneId}
                 sceneId={selectedSceneId}
                 chapterId={selectedChapterId}
                 onDraftComplete={async (text) => {
@@ -177,7 +178,7 @@ export default function WorkspacePage() {
 
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'summary' ? '' : 'hidden'}`}>
             {selectedChapterId ? (
-              <SummaryPanel key={selectedChapterId} chapterId={selectedChapterId} />
+              <SummaryPanel chapterId={selectedChapterId} />
             ) : (
               <EmptyHint text="选择一个章节以查看摘要" />
             )}
@@ -185,6 +186,10 @@ export default function WorkspacePage() {
 
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'bible' ? '' : 'hidden'}`}>
             <BiblePanel />
+          </div>
+
+          <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'lore' ? '' : 'hidden'}`}>
+            <LorePanel />
           </div>
 
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'export' ? '' : 'hidden'}`}>
