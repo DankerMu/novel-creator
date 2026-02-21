@@ -29,6 +29,25 @@ from app.models import Book, Chapter, Project, Scene, SceneTextVersion
 router = APIRouter(prefix="/api", tags=["projects"])
 
 
+def _safe_loads(raw: str | None, default=None):
+    """Parse a JSON text column, returning *default* on failure."""
+    try:
+        return json.loads(raw) if raw else default
+    except (json.JSONDecodeError, TypeError):
+        return default
+
+
+def _scene_to_out(scene: Scene) -> dict:
+    return {
+        "id": scene.id,
+        "chapter_id": scene.chapter_id,
+        "title": scene.title,
+        "sort_order": scene.sort_order,
+        "scene_card": _safe_loads(scene.scene_card_json),
+        "created_at": scene.created_at,
+    }
+
+
 # ── Projects ──────────────────────────────────────────────
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)
@@ -205,7 +224,7 @@ async def create_scene(data: SceneCreate, db: AsyncSession = Depends(get_db)):
     # Create initial empty version
     v = SceneTextVersion(scene_id=scene.id, version=1, content_md="", char_count=0)
     db.add(v)
-    return scene
+    return _scene_to_out(scene)
 
 
 @router.get("/scenes", response_model=list[SceneOut])
@@ -213,7 +232,7 @@ async def list_scenes(chapter_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Scene).where(Scene.chapter_id == chapter_id).order_by(Scene.sort_order)
     )
-    return result.scalars().all()
+    return [_scene_to_out(s) for s in result.scalars().all()]
 
 
 @router.get("/scenes/{scene_id}", response_model=SceneOut)
@@ -221,7 +240,7 @@ async def get_scene(scene_id: int, db: AsyncSession = Depends(get_db)):
     scene = await db.get(Scene, scene_id)
     if not scene:
         raise HTTPException(404, "Scene not found")
-    return scene
+    return _scene_to_out(scene)
 
 
 @router.put("/scenes/{scene_id}", response_model=SceneOut)
@@ -233,7 +252,7 @@ async def update_scene(scene_id: int, data: SceneUpdate, db: AsyncSession = Depe
         setattr(scene, k, v)
     await db.flush()
     await db.refresh(scene)
-    return scene
+    return _scene_to_out(scene)
 
 
 @router.delete("/scenes/{scene_id}", status_code=204)
@@ -254,11 +273,11 @@ async def save_scene_card(
     if not scene:
         raise HTTPException(404, "Scene not found")
     scene.scene_card_json = json.dumps(
-        data.scene_card, ensure_ascii=False
+        data.scene_card.model_dump(), ensure_ascii=False
     )
     await db.flush()
     await db.refresh(scene)
-    return scene
+    return _scene_to_out(scene)
 
 
 # ── Scene Versions ────────────────────────────────────────

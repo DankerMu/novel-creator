@@ -1,7 +1,6 @@
-import json
 from datetime import datetime
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 
 # --- Project ---
@@ -81,22 +80,20 @@ class SceneOut(BaseModel):
     created_at: datetime
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="before")
-    @classmethod
-    def _parse_scene_card(cls, data: object) -> object:
-        raw = getattr(data, "scene_card_json", None)
-        if raw and isinstance(raw, str):
-            try:
-                parsed = json.loads(raw)
-            except (json.JSONDecodeError, TypeError):
-                parsed = None
-            if hasattr(data, "__dict__"):
-                data.__dict__["scene_card"] = parsed
-        return data
+
+class SceneCardData(BaseModel):
+    title: str
+    location: str
+    time: str
+    characters: list[str]
+    conflict: str
+    turning_point: str
+    reveal: str = ""
+    target_chars: int = 800
 
 
 class SceneCardUpdate(BaseModel):
-    scene_card: dict
+    scene_card: SceneCardData
 
 
 # --- SceneTextVersion ---

@@ -23,6 +23,7 @@ export function GeneratePanel({
   const [error, setError] = useState('')
   const [hints, setHints] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+  const dismissedRef = useRef(false)
 
   // Fetch scene to restore saved card
   const { data: scene } = useQuery({
@@ -36,6 +37,7 @@ export function GeneratePanel({
     if (prevSceneRef.current !== sceneId) {
       prevSceneRef.current = sceneId
       abortRef.current?.abort()
+      dismissedRef.current = false
       setSceneCard(null)
       setStreaming(false)
       setStreamText('')
@@ -46,7 +48,7 @@ export function GeneratePanel({
 
   // Restore saved card when scene data loads
   useEffect(() => {
-    if (scene?.scene_card && !sceneCard) {
+    if (scene?.scene_card && !sceneCard && !dismissedRef.current) {
       setSceneCard(scene.scene_card)
     }
   }, [scene, sceneCard])
@@ -237,6 +239,7 @@ export function GeneratePanel({
         <button
           className="text-xs text-slate-400 hover:text-red-500 cursor-pointer"
           onClick={() => {
+            dismissedRef.current = true
             setSceneCard(null)
             setStreamText('')
           }}
