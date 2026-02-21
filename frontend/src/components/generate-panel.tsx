@@ -1,21 +1,11 @@
 'use client'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useWorkspace } from '@/hooks/use-workspace'
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/api'
+import type { Scene, SceneCard } from '@/lib/types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-interface SceneCard {
-  title: string
-  location: string
-  time: string
-  characters: string[]
-  conflict: string
-  turning_point: string
-  reveal: string
-  target_chars: number
-}
 
 export function GeneratePanel({
   sceneId,
@@ -34,7 +24,13 @@ export function GeneratePanel({
   const [hints, setHints] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
-  // Reset state when scene changes (but NOT on tab switch)
+  // Fetch scene to restore saved card
+  const { data: scene } = useQuery({
+    queryKey: ['scene-detail', sceneId],
+    queryFn: () => apiFetch<Scene>(`/api/scenes/${sceneId}`),
+  })
+
+  // Reset state when scene changes
   const prevSceneRef = useRef(sceneId)
   useEffect(() => {
     if (prevSceneRef.current !== sceneId) {
@@ -47,6 +43,27 @@ export function GeneratePanel({
       setHints('')
     }
   }, [sceneId])
+
+  // Restore saved card when scene data loads
+  useEffect(() => {
+    if (scene?.scene_card && !sceneCard) {
+      setSceneCard(scene.scene_card)
+    }
+  }, [scene, sceneCard])
+
+  // Save card to backend
+  const saveCardMutation = useMutation({
+    mutationFn: (card: SceneCard) =>
+      apiFetch<Scene>(`/api/scenes/${sceneId}/card`, {
+        method: 'PUT',
+        body: JSON.stringify({ scene_card: card }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['scene-detail', sceneId],
+      })
+    },
+  })
 
   const cardMutation = useMutation({
     mutationFn: async (hints: string) => {
@@ -65,6 +82,7 @@ export function GeneratePanel({
     onSuccess: (data) => {
       setSceneCard(data)
       setError('')
+      saveCardMutation.mutate(data)
     },
     onError: (e) => setError(e.message),
   })
@@ -131,6 +149,12 @@ export function GeneratePanel({
     }
   }
 
+  // Save edits to backend when user modifies the card
+  const updateCard = (updated: SceneCard) => {
+    setSceneCard(updated)
+    saveCardMutation.mutate(updated)
+  }
+
   return (
     <div className="space-y-3">
       {error && (
@@ -167,19 +191,19 @@ export function GeneratePanel({
       {sceneCard && (
         <div className="bg-slate-50 rounded p-2 text-xs space-y-1.5">
           <Field label="标题" value={sceneCard.title}
-            onChange={(v) => setSceneCard({ ...sceneCard, title: v })} />
+            onChange={(v) => updateCard({ ...sceneCard, title: v })} />
           <Field label="地点" value={sceneCard.location}
-            onChange={(v) => setSceneCard({ ...sceneCard, location: v })} />
+            onChange={(v) => updateCard({ ...sceneCard, location: v })} />
           <Field label="时间" value={sceneCard.time}
-            onChange={(v) => setSceneCard({ ...sceneCard, time: v })} />
+            onChange={(v) => updateCard({ ...sceneCard, time: v })} />
           <Field label="人物" value={sceneCard.characters.join('、')}
-            onChange={(v) => setSceneCard({ ...sceneCard, characters: v.split('、').map(s => s.trim()).filter(Boolean) })} />
+            onChange={(v) => updateCard({ ...sceneCard, characters: v.split('、').map(s => s.trim()).filter(Boolean) })} />
           <FieldArea label="冲突" value={sceneCard.conflict}
-            onChange={(v) => setSceneCard({ ...sceneCard, conflict: v })} />
+            onChange={(v) => updateCard({ ...sceneCard, conflict: v })} />
           <FieldArea label="转折" value={sceneCard.turning_point}
-            onChange={(v) => setSceneCard({ ...sceneCard, turning_point: v })} />
+            onChange={(v) => updateCard({ ...sceneCard, turning_point: v })} />
           <Field label="目标字数" value={String(sceneCard.target_chars)}
-            onChange={(v) => setSceneCard({ ...sceneCard, target_chars: Math.max(100, Math.min(parseInt(v) || 800, 5000)) })} />
+            onChange={(v) => updateCard({ ...sceneCard, target_chars: Math.max(100, Math.min(parseInt(v) || 800, 5000)) })} />
         </div>
       )}
 

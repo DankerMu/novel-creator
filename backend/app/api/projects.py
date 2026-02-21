@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +16,7 @@ from app.api.schemas import (
     ProjectOut,
     ProjectTree,
     ProjectUpdate,
+    SceneCardUpdate,
     SceneCreate,
     SceneOut,
     SceneUpdate,
@@ -239,6 +242,23 @@ async def delete_scene(scene_id: int, db: AsyncSession = Depends(get_db)):
     if not scene:
         raise HTTPException(404, "Scene not found")
     await db.delete(scene)
+
+
+@router.put("/scenes/{scene_id}/card", response_model=SceneOut)
+async def save_scene_card(
+    scene_id: int,
+    data: SceneCardUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    scene = await db.get(Scene, scene_id)
+    if not scene:
+        raise HTTPException(404, "Scene not found")
+    scene.scene_card_json = json.dumps(
+        data.scene_card, ensure_ascii=False
+    )
+    await db.flush()
+    await db.refresh(scene)
+    return scene
 
 
 # ── Scene Versions ────────────────────────────────────────

@@ -23,11 +23,23 @@ export interface Chapter {
   created_at: string
 }
 
+export interface SceneCard {
+  title: string
+  location: string
+  time: string
+  characters: string[]
+  conflict: string
+  turning_point: string
+  reveal: string
+  target_chars: number
+}
+
 export interface Scene {
   id: number
   chapter_id: number
   title: string
   sort_order: number
+  scene_card: SceneCard | null
   created_at: string
 }
 
