@@ -11,9 +11,10 @@ import { GeneratePanel } from '@/components/generate-panel'
 import { SummaryPanel } from '@/components/summary-panel'
 import { ExportPanel } from '@/components/export-panel'
 import { LorePanel } from '@/components/lore-panel'
+import { KGPanel } from '@/components/kg-panel'
 import { useMemo, useState } from 'react'
 
-type RightTab = 'generate' | 'summary' | 'bible' | 'lore' | 'export'
+type RightTab = 'generate' | 'summary' | 'bible' | 'lore' | 'kg' | 'export'
 
 export default function WorkspacePage() {
   const {
@@ -100,6 +101,7 @@ export default function WorkspacePage() {
     { key: 'summary', label: '摘要' },
     { key: 'bible', label: '设定' },
     { key: 'lore', label: 'Lore' },
+    { key: 'kg', label: 'KG' },
     { key: 'export', label: '导出' },
   ]
 
@@ -190,6 +192,14 @@ export default function WorkspacePage() {
 
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'lore' ? '' : 'hidden'}`}>
             <LorePanel />
+          </div>
+
+          <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'kg' ? '' : 'hidden'}`}>
+            {projectId ? (
+              <KGPanel />
+            ) : (
+              <EmptyHint text="选择一个项目以使用 KG 审阅" />
+            )}
           </div>
 
           <div className={`flex-1 overflow-y-auto p-3 ${rightTab === 'export' ? '' : 'hidden'}`}>

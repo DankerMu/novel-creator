@@ -76,9 +76,54 @@ export interface LoreEntry {
   aliases: string[]
   content_md: string
   secrets_md: string
-  keywords: string[]
+  triggers: {
+    keywords: string[]
+    and_keywords?: string[]
+  }
   priority: number
   locked: boolean
   created_at: string
   updated_at: string
+}
+
+export type KGCategory = 'entity' | 'relation' | 'event'
+export type KGStatus = 'pending' | 'auto_approved' | 'user_approved' | 'rejected'
+
+export interface KGProposal {
+  id: number
+  project_id: number
+  chapter_id: number
+  category: KGCategory
+  data: {
+    label?: string
+    name?: string
+    properties?: Record<string, string>
+    source?: string
+    target?: string
+    relation?: string
+  }
+  confidence: number
+  status: KGStatus
+  evidence_text: string
+  evidence_location: string
+  reviewed_at: string | null
+  created_at: string
+}
+
+export interface KGNode {
+  id: number
+  project_id: number
+  label: string
+  name: string
+  properties: Record<string, string>
+  created_at: string
+}
+
+export interface KGEdge {
+  id: number
+  project_id: number
+  source_node_id: number
+  target_node_id: number
+  relation: string
+  properties: Record<string, string>
 }
