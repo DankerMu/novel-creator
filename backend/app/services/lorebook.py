@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import LoreEntry, Scene, SceneTextVersion
+from app.services.text_utils import truncate_to_sentence
 
 
 def _safe_loads(raw: str, default=None):
@@ -97,19 +98,6 @@ async def get_scan_window(
     return "\n\n".join(texts)
 
 
-def _truncate_to_sentence(text: str, budget: int) -> str:
-    """Truncate text to budget chars, trimming at sentence boundary."""
-    if len(text) <= budget:
-        return text
-
-    truncated = text[:budget]
-    # Try to find last sentence-ending punctuation
-    for sep in ["\n", "。", ".", "！", "!", "？", "?", "；", ";"]:
-        idx = truncated.rfind(sep)
-        if idx > budget // 2:  # Don't trim too aggressively
-            return truncated[: idx + 1]
-    return truncated
-
 
 async def inject_lorebook(
     db: AsyncSession,
@@ -152,8 +140,8 @@ async def inject_lorebook(
         block = f"## {entry.title} ({entry.type})\n{entry.content_md}"
         if total_len + len(block) > budget_chars:
             remaining = budget_chars - total_len
-            if remaining > 50:  # Only add if meaningful space left
-                block = _truncate_to_sentence(block, remaining)
+            if remaining > 50:
+                block = truncate_to_sentence(block, remaining)
                 parts.append(block)
             break
         parts.append(block)
