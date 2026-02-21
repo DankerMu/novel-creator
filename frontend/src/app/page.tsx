@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { useWorkspace } from '@/hooks/use-workspace'
@@ -57,6 +57,9 @@ export default function WorkspacePage() {
       apiFetch(`/api/projects/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onError: () => {
+      alert('删除失败，请重试')
     },
   })
 
@@ -334,6 +337,14 @@ function CreateProjectModal({
   const [tense, setTense] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !creating) onClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose, creating])
 
   const handleCreate = async () => {
     if (!title.trim()) {
