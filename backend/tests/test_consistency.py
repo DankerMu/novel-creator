@@ -7,7 +7,6 @@ import pytest
 from app.models.tables import KGEdge, KGNode
 from app.services.consistency import run_consistency_check
 
-
 # ---------- Helpers ----------
 
 async def _setup_project(client) -> int:
