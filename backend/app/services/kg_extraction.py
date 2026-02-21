@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,8 +40,6 @@ Rules:
 
 def _safe_loads_list(raw: str) -> list:
     """Parse JSON array from LLM output, return [] on failure."""
-    import re
-
     # Strip markdown fences and preamble text
     m = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
     if m:
@@ -60,9 +59,9 @@ def _safe_loads_list(raw: str) -> list:
             raw = raw[idx:]
 
     # Fix unescaped ASCII double quotes used as Chinese quotation marks
-    # Pattern: a " with CJK character on both sides is content, not structural
+    # Only match CJK unified ideographs, exclude fullwidth punctuation
     raw = re.sub(
-        r'(?<=[\u4e00-\u9fff\uff00-\uffef])"(?=[\u4e00-\u9fff\uff00-\uffef])',
+        r'(?<=[\u4e00-\u9fff\u3400-\u4dbf])"(?=[\u4e00-\u9fff\u3400-\u4dbf])',
         r'\\"',
         raw,
     )
