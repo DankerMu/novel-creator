@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { useWorkspace } from '@/hooks/use-workspace'
@@ -18,7 +18,12 @@ export function ProjectTreePanel() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [adding, setAdding] = useState<AddingTarget>(null)
   const [newTitle, setNewTitle] = useState('')
+  const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (adding) inputRef.current?.focus()
+  }, [adding])
 
   const { data: tree } = useQuery({
     queryKey: ['project-tree', projectId],
@@ -39,16 +44,19 @@ export function ProjectTreePanel() {
     setNewTitle('')
   }
 
+  const onMutationError = () => {
+    setError('创建失败，请重试')
+    setTimeout(() => setError(''), 3000)
+  }
+
   const createBook = useMutation({
     mutationFn: (title: string) =>
       apiFetch<Book>('/api/books', {
         method: 'POST',
         body: JSON.stringify({ project_id: projectId, title }),
       }),
-    onSuccess: () => {
-      invalidateTree()
-      resetAdding()
-    },
+    onSuccess: () => { invalidateTree(); resetAdding() },
+    onError: onMutationError,
   })
 
   const createChapter = useMutation({
@@ -57,10 +65,8 @@ export function ProjectTreePanel() {
         method: 'POST',
         body: JSON.stringify({ book_id: bookId, title }),
       }),
-    onSuccess: () => {
-      invalidateTree()
-      resetAdding()
-    },
+    onSuccess: () => { invalidateTree(); resetAdding() },
+    onError: onMutationError,
   })
 
   const createScene = useMutation({
@@ -69,10 +75,8 @@ export function ProjectTreePanel() {
         method: 'POST',
         body: JSON.stringify({ chapter_id: chapterId, title }),
       }),
-    onSuccess: () => {
-      invalidateTree()
-      resetAdding()
-    },
+    onSuccess: () => { invalidateTree(); resetAdding() },
+    onError: onMutationError,
   })
 
   const handleSubmit = () => {
@@ -88,10 +92,15 @@ export function ProjectTreePanel() {
     else if (e.key === 'Escape') resetAdding()
   }
 
+  const handleBlur = () => {
+    if (newTitle.trim()) handleSubmit()
+    else resetAdding()
+  }
+
   const startAdding = (target: AddingTarget) => {
     setAdding(target)
     setNewTitle('')
-    setTimeout(() => inputRef.current?.focus(), 0)
+    setError('')
   }
 
   if (!projectId) {
@@ -106,6 +115,11 @@ export function ProjectTreePanel() {
 
   return (
     <div className="p-2 text-sm">
+      {error && (
+        <div className="text-xs text-red-600 bg-red-50 rounded p-1.5 mb-2 mx-1">
+          {error}
+        </div>
+      )}
       <h2 className="font-bold text-base mb-2 px-2">{tree.title}</h2>
 
       {tree.books.map((book) => (
@@ -159,7 +173,7 @@ export function ProjectTreePanel() {
                             value={newTitle}
                             onChange={(e) => setNewTitle(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            onBlur={() => { if (!newTitle.trim()) resetAdding() }}
+                            onBlur={handleBlur}
                             disabled={isPending}
                           />
                         </div>
