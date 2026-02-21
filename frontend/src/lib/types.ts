@@ -82,3 +82,41 @@ export interface LoreEntry {
   created_at: string
   updated_at: string
 }
+
+export interface KGProposal {
+  id: number
+  project_id: number
+  chapter_id: number
+  category: string // 'entity' | 'relation' | 'event'
+  data: {
+    label?: string
+    name?: string
+    properties?: Record<string, string>
+    source?: string
+    target?: string
+    relation?: string
+  }
+  confidence: number // 0~1
+  status: string // 'auto_approved' | 'pending' | 'user_approved' | 'rejected'
+  evidence_text: string
+  evidence_location: string
+  reviewed_at: string | null
+  created_at: string
+}
+
+export interface KGNode {
+  id: number
+  project_id: number
+  label: string
+  name: string
+  properties: Record<string, string>
+  created_at: string
+}
+
+export interface KGEdge {
+  id: number
+  source_node_id: number
+  target_node_id: number
+  relation: string
+  properties: Record<string, string>
+}

@@ -196,3 +196,41 @@ class LoreEntryOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     model_config = {"from_attributes": True}
+
+
+# --- KG ---
+
+class KGNodeOut(BaseModel):
+    id: int
+    project_id: int
+    label: str
+    name: str
+    properties: dict
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class KGEdgeOut(BaseModel):
+    id: int
+    project_id: int
+    source_node_id: int
+    target_node_id: int
+    relation: str
+    properties: dict
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class KGProposalOut(BaseModel):
+    id: int
+    project_id: int
+    chapter_id: int
+    category: str
+    data: dict
+    confidence: float
+    status: str
+    evidence_text: str
+    evidence_location: str
+    reviewed_at: datetime | None
+    created_at: datetime
+    model_config = {"from_attributes": True}
