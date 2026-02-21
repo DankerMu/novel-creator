@@ -59,7 +59,7 @@ export function ProjectTreePanel() {
                       ? 'bg-blue-100 text-blue-700 font-medium'
                       : 'hover:bg-gray-50'
                   }`}
-                  onClick={() => selectScene(scene.id)}
+                  onClick={() => selectScene(scene.id, chapter.id, book.id)}
                 >
                   {scene.title}
                 </button>

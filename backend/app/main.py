@@ -13,7 +13,12 @@ from app.api.summary import router as summary_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import os
+
+    from app.core.database import Base, engine
+
     os.makedirs("data", exist_ok=True)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
 
 

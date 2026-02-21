@@ -30,6 +30,14 @@ class _InstructorProxy:
 instructor_client = _InstructorProxy()
 
 
+def _litellm_model(model: str | None = None) -> str:
+    """Add openai/ prefix for LiteLLM routing."""
+    m = model or settings.LLM_MODEL
+    if "/" not in m:
+        return f"openai/{m}"
+    return m
+
+
 async def call_llm(
     messages: list[dict],
     model: str | None = None,
@@ -37,9 +45,8 @@ async def call_llm(
     **kwargs,
 ):
     """Unified LLM call via LiteLLM for non-structured outputs."""
-    model = model or settings.LLM_MODEL
     response = await acompletion(
-        model=model,
+        model=_litellm_model(model),
         messages=messages,
         api_base=settings.LLM_API_BASE,
         api_key=settings.LLM_API_KEY,
@@ -53,9 +60,8 @@ async def call_llm_stream(
     messages: list[dict], model: str | None = None, **kwargs
 ):
     """Streaming LLM call, yields text chunks."""
-    model = model or settings.LLM_MODEL
     response = await acompletion(
-        model=model,
+        model=_litellm_model(model),
         messages=messages,
         api_base=settings.LLM_API_BASE,
         api_key=settings.LLM_API_KEY,

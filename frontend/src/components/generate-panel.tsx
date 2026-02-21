@@ -31,6 +31,7 @@ export function GeneratePanel({
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState('')
   const [error, setError] = useState('')
+  const [hints, setHints] = useState('')
 
   const cardMutation = useMutation({
     mutationFn: async (hints: string) => {
@@ -107,9 +108,7 @@ export function GeneratePanel({
   }
 
   return (
-    <div className="border rounded p-3 space-y-3">
-      <h3 className="font-bold text-sm">AI 生成</h3>
-
+    <div className="space-y-3">
       {error && (
         <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
           {error}
@@ -118,38 +117,53 @@ export function GeneratePanel({
 
       {/* Step 1: Generate Scene Card */}
       {!sceneCard && (
-        <div>
+        <div className="space-y-2">
+          <textarea
+            className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs
+              text-slate-700 resize-none focus:outline-none focus:border-blue-400
+              placeholder:text-slate-400"
+            rows={2}
+            placeholder="场景提示（可选）：如 '描写林远在启航前夜的紧张与期待'"
+            value={hints}
+            onChange={(e) => setHints(e.target.value)}
+          />
           <button
-            className="text-xs px-3 py-1.5 bg-blue-600 text-white
-              rounded disabled:opacity-50"
+            className="w-full text-xs px-3 py-2 bg-blue-600 text-white
+              rounded hover:bg-blue-700 disabled:opacity-50 cursor-pointer
+              transition-colors"
             disabled={cardMutation.isPending}
-            onClick={() => cardMutation.mutate('')}
+            onClick={() => cardMutation.mutate(hints)}
           >
             {cardMutation.isPending ? '生成中...' : '生成场景卡'}
           </button>
         </div>
       )}
 
-      {/* Display Scene Card */}
+      {/* Display & Edit Scene Card */}
       {sceneCard && (
-        <div className="bg-gray-50 rounded p-2 text-xs space-y-1">
-          <div><b>标题:</b> {sceneCard.title}</div>
-          <div><b>地点:</b> {sceneCard.location}</div>
-          <div><b>时间:</b> {sceneCard.time}</div>
-          <div><b>人物:</b> {sceneCard.characters.join('、')}</div>
-          <div><b>冲突:</b> {sceneCard.conflict}</div>
-          {sceneCard.turning_point && (
-            <div><b>转折:</b> {sceneCard.turning_point}</div>
-          )}
-          <div><b>目标字数:</b> {sceneCard.target_chars}</div>
+        <div className="bg-slate-50 rounded p-2 text-xs space-y-1.5">
+          <Field label="标题" value={sceneCard.title}
+            onChange={(v) => setSceneCard({ ...sceneCard, title: v })} />
+          <Field label="地点" value={sceneCard.location}
+            onChange={(v) => setSceneCard({ ...sceneCard, location: v })} />
+          <Field label="时间" value={sceneCard.time}
+            onChange={(v) => setSceneCard({ ...sceneCard, time: v })} />
+          <Field label="人物" value={sceneCard.characters.join('、')}
+            onChange={(v) => setSceneCard({ ...sceneCard, characters: v.split('、').map(s => s.trim()).filter(Boolean) })} />
+          <FieldArea label="冲突" value={sceneCard.conflict}
+            onChange={(v) => setSceneCard({ ...sceneCard, conflict: v })} />
+          <FieldArea label="转折" value={sceneCard.turning_point}
+            onChange={(v) => setSceneCard({ ...sceneCard, turning_point: v })} />
+          <Field label="目标字数" value={String(sceneCard.target_chars)}
+            onChange={(v) => setSceneCard({ ...sceneCard, target_chars: parseInt(v) || 800 })} />
         </div>
       )}
 
       {/* Step 2: Generate Draft */}
       {sceneCard && !streaming && !streamText && (
         <button
-          className="text-xs px-3 py-1.5 bg-green-600 text-white
-            rounded"
+          className="w-full text-xs px-3 py-2 bg-green-600 text-white
+            rounded hover:bg-green-700 cursor-pointer transition-colors"
           onClick={startStreaming}
         >
           生成正文
@@ -158,7 +172,10 @@ export function GeneratePanel({
 
       {/* Streaming Output */}
       {streaming && (
-        <div className="text-xs text-gray-500">正在生成中...</div>
+        <div className="text-xs text-slate-500 flex items-center gap-2">
+          <div className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+          正在生成中...
+        </div>
       )}
       {streamText && (
         <div className="text-xs bg-white border rounded p-2
@@ -170,7 +187,7 @@ export function GeneratePanel({
       {/* Reset */}
       {sceneCard && (
         <button
-          className="text-xs text-gray-400 hover:text-gray-600"
+          className="text-xs text-slate-400 hover:text-red-500 cursor-pointer"
           onClick={() => {
             setSceneCard(null)
             setStreamText('')
@@ -179,6 +196,40 @@ export function GeneratePanel({
           重置
         </button>
       )}
+    </div>
+  )
+}
+
+function Field({ label, value, onChange }: {
+  label: string; value: string; onChange: (v: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-medium text-slate-500 w-14 shrink-0">{label}</span>
+      <input
+        className="flex-1 px-1.5 py-0.5 border border-slate-200 rounded
+          text-xs text-slate-700 bg-white focus:outline-none focus:border-blue-400"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  )
+}
+
+function FieldArea({ label, value, onChange }: {
+  label: string; value: string; onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <span className="font-medium text-slate-500 text-xs">{label}</span>
+      <textarea
+        className="w-full mt-0.5 px-1.5 py-1 border border-slate-200 rounded
+          text-xs text-slate-700 bg-white resize-none focus:outline-none
+          focus:border-blue-400"
+        rows={2}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   )
 }

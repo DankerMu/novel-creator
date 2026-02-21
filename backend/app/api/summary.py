@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import ChapterSummaryOut
+from app.api.schemas import ChapterSummaryOut, ChapterSummaryUpdate
 from app.core.database import get_db
 from app.core.events import ChapterMarkDoneEvent, emit
 from app.models import Book, Chapter, ChapterSummary
@@ -114,6 +114,52 @@ async def get_chapter_summary(
     if not summary:
         raise HTTPException(404, "Summary not found")
 
+    return _summary_to_out(summary)
+
+
+@router.put(
+    "/chapters/{chapter_id}/summary",
+    response_model=ChapterSummaryOut,
+)
+async def update_chapter_summary(
+    chapter_id: int,
+    body: ChapterSummaryUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing chapter summary."""
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(404, "Chapter not found")
+
+    result = await db.execute(
+        select(ChapterSummary).where(
+            ChapterSummary.chapter_id == chapter_id
+        )
+    )
+    summary = result.scalar_one_or_none()
+    if not summary:
+        raise HTTPException(404, "Summary not found")
+
+    if body.summary_md is not None:
+        summary.summary_md = body.summary_md
+    if body.key_events is not None:
+        summary.key_events_json = json.dumps(
+            body.key_events, ensure_ascii=False
+        )
+    if body.keywords is not None:
+        summary.keywords_json = json.dumps(
+            body.keywords, ensure_ascii=False
+        )
+    if body.entities is not None:
+        summary.entities_json = json.dumps(
+            body.entities, ensure_ascii=False
+        )
+    if body.plot_threads is not None:
+        summary.plot_threads_json = json.dumps(
+            body.plot_threads, ensure_ascii=False
+        )
+
+    await db.flush()
     return _summary_to_out(summary)
 
 

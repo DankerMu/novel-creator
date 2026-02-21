@@ -126,6 +126,13 @@ class ProjectTree(BaseModel):
 
 
 # --- ChapterSummary ---
+class ChapterSummaryUpdate(BaseModel):
+    summary_md: str | None = None
+    key_events: list[str] | None = None
+    keywords: list[str] | None = None
+    entities: list[str] | None = None
+    plot_threads: list[str] | None = None
+
 class ChapterSummaryOut(BaseModel):
     id: int
     chapter_id: int
