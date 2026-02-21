@@ -1,5 +1,7 @@
 """AI generation schemas: SceneCard, SceneDraft, Context Pack."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -46,4 +48,39 @@ class ChapterSummaryModel(BaseModel):
     )
     plot_threads: list[str] = Field(
         default_factory=list, description="情节线索"
+    )
+
+
+class RewriteRequest(BaseModel):
+    scene_id: int
+    text: str = Field(
+        description="当前场景正文", max_length=100000
+    )
+    target_chars: int = Field(
+        default=1500, ge=100, le=50000,
+        description="目标字数",
+    )
+    mode: Literal["expand", "compress"] = Field(
+        description="重写模式: expand 或 compress",
+    )
+
+
+class WordCountCheckRequest(BaseModel):
+    text: str = Field(
+        description="当前场景正文", max_length=100000
+    )
+    target_chars: int = Field(
+        default=1500, ge=100, le=50000,
+        description="目标字数",
+    )
+
+
+class WordCountCheck(BaseModel):
+    status: str = Field(description="within / over / under")
+    actual_chars: int
+    target_chars: int
+    delta: int
+    deviation: float
+    suggestion: str | None = Field(
+        default=None, description="compress / expand / None"
     )
