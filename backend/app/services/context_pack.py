@@ -6,10 +6,8 @@ Layers:
   3. KG+Lore  (15~25%) – KG approved facts + lorebook triggered entries
   4. Recent   (>=50%)  – current scene text (gets leftover budget)
 
-Overflow degradation order:
-  1. Truncate low-priority Lore entries
-  2. Compress rolling summaries
-  3. Shorten recent text
+Overflow degradation: each layer is hard-capped at its max ratio.
+Leftover budget from earlier layers flows to Recent (layer 4).
 """
 
 import json
@@ -20,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import BibleField, Chapter, ChapterSummary, Scene, SceneTextVersion
 from app.models.tables import KGProposal
 from app.services.lorebook import inject_lorebook
+from app.services.text_utils import truncate_to_sentence
 
 # Budget ratios (fraction of total_budget_chars)
 _SYSTEM_MAX = 0.10
@@ -27,20 +26,10 @@ _LONGTERM_MAX = 0.15
 _KG_LORE_MAX = 0.25
 _RECENT_MIN = 0.50
 
+_SEPARATOR = "\n\n---\n\n"
+
 # Default total budget in chars (~8K tokens for CJK)
 DEFAULT_BUDGET_CHARS = 32_000
-
-
-def _truncate_to_sentence(text: str, budget: int) -> str:
-    """Truncate text to budget chars at a sentence boundary."""
-    if len(text) <= budget:
-        return text
-    truncated = text[:budget]
-    for sep in ["\n", "。", ".", "！", "!", "？", "?", "；", ";"]:
-        idx = truncated.rfind(sep)
-        if idx > budget // 2:
-            return truncated[: idx + 1]
-    return truncated
 
 
 # ---------- Layer 1: System (Bible) ----------
@@ -64,6 +53,9 @@ async def get_locked_bible_text(
     for f in fields:
         if f.value_md.strip():
             lines.append(f"## {f.key}\n{f.value_md}")
+    # M1 fix: return empty if no fields had content
+    if len(lines) <= 1:
+        return ""
     return "\n\n".join(lines)
 
 
@@ -114,8 +106,10 @@ async def _get_kg_facts_text(
     if not proposals:
         return ""
 
-    lines = ["# 知识图谱事实"]
-    total = len(lines[0])
+    header = "# 知识图谱事实"
+    lines = [header]
+    # H3 fix: count header + join newline
+    total = len(header) + 1
     for p in proposals:
         data = json.loads(p.data_json) if p.data_json else {}
         if p.category == "entity":
@@ -156,7 +150,9 @@ async def get_kg_lore_text(
     kg_text = await _get_kg_facts_text(db, project_id, kg_budget)
     kg_used = len(kg_text)
 
-    lore_budget = budget - kg_used
+    # M2 fix: reserve separator between KG and Lore
+    sep_cost = 2 if kg_used > 0 else 0
+    lore_budget = max(0, budget - kg_used - sep_cost)
     lore_text = await inject_lorebook(
         db, project_id, scene_id, budget_chars=lore_budget
     )
@@ -220,15 +216,16 @@ async def assemble_context_pack(
       KG+Lore:   up to 25% of total
       Recent:    at least 50% of total (gets all leftover)
 
-    Overflow degradation:
-      1. Truncate KG+Lore layer
-      2. Truncate Long-term summaries
-      3. Truncate Recent text
+    Each layer is hard-capped. Leftover from earlier layers flows to Recent.
     """
-    sys_budget = int(total_budget * _SYSTEM_MAX)
-    lt_budget = int(total_budget * _LONGTERM_MAX)
-    kl_budget = int(total_budget * _KG_LORE_MAX)
-    recent_min = int(total_budget * _RECENT_MIN)
+    # H2 fix: reserve space for separators (up to 3 × len(_SEPARATOR))
+    sep_overhead = len(_SEPARATOR) * 3
+    usable = total_budget - sep_overhead
+
+    sys_budget = int(usable * _SYSTEM_MAX)
+    lt_budget = int(usable * _LONGTERM_MAX)
+    kl_budget = int(usable * _KG_LORE_MAX)
+    recent_min = int(usable * _RECENT_MIN)
 
     # --- Collect raw content ---
     system_raw = await get_locked_bible_text(db, project_id)
@@ -238,25 +235,21 @@ async def assemble_context_pack(
     )
     recent_raw = await get_recent_scene_text(db, scene_id)
 
-    # --- Apply budgets with overflow degradation ---
-
-    # Layer 1: System — hard cap
-    system_text = _truncate_to_sentence(system_raw, sys_budget)
+    # --- Apply budgets ---
+    system_text = truncate_to_sentence(system_raw, sys_budget)
     sys_used = len(system_text)
 
-    # Layer 2: Long-term — hard cap, leftover flows to Recent
-    longterm_text = _truncate_to_sentence(longterm_raw, lt_budget)
+    longterm_text = truncate_to_sentence(longterm_raw, lt_budget)
     lt_used = len(longterm_text)
 
-    # Layer 3: KG+Lore — already budget-capped during collection
-    kglore_text = _truncate_to_sentence(kglore_raw, kl_budget)
+    kglore_text = truncate_to_sentence(kglore_raw, kl_budget)
     kl_used = len(kglore_text)
 
     # Layer 4: Recent — gets all leftover budget
     used_by_others = sys_used + lt_used + kl_used
-    recent_budget = max(recent_min, total_budget - used_by_others)
-    recent_text = _truncate_to_sentence(recent_raw, recent_budget)
+    recent_budget = max(recent_min, usable - used_by_others)
+    recent_text = truncate_to_sentence(recent_raw, recent_budget)
 
     # --- Assemble ---
     parts = [p for p in [system_text, longterm_text, kglore_text, recent_text] if p]
-    return "\n\n---\n\n".join(parts)
+    return _SEPARATOR.join(parts)

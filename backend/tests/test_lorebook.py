@@ -1,6 +1,7 @@
 import pytest
 
-from app.services.lorebook import _truncate_to_sentence, match_triggers
+from app.services.lorebook import match_triggers
+from app.services.text_utils import truncate_to_sentence
 
 # ==================== CRUD ====================
 
@@ -255,12 +256,12 @@ def test_trigger_match_case_insensitive():
 
 def test_truncate_within_budget():
     text = "短文本。"
-    assert _truncate_to_sentence(text, 100) == text
+    assert truncate_to_sentence(text, 100) == text
 
 
 def test_truncate_at_sentence_boundary():
     text = "第一句话。第二句话。第三句话。"
-    result = _truncate_to_sentence(text, 12)
+    result = truncate_to_sentence(text, 12)
     # Should cut at a sentence boundary
     assert result.endswith("。")
     assert len(result) <= 12
@@ -268,7 +269,7 @@ def test_truncate_at_sentence_boundary():
 
 def test_truncate_hard_limit():
     text = "一" * 200
-    result = _truncate_to_sentence(text, 50)
+    result = truncate_to_sentence(text, 50)
     assert len(result) <= 50
 
 
