@@ -47,3 +47,27 @@ class ChapterSummaryModel(BaseModel):
     plot_threads: list[str] = Field(
         default_factory=list, description="情节线索"
     )
+
+
+class RewriteRequest(BaseModel):
+    scene_id: int
+    text: str = Field(description="当前场景正文")
+    target_chars: int = Field(
+        default=1500, ge=100, le=50000,
+        description="目标字数",
+    )
+    mode: str = Field(
+        description="重写模式: expand 或 compress",
+        pattern="^(expand|compress)$",
+    )
+
+
+class WordCountCheck(BaseModel):
+    status: str = Field(description="within / over / under")
+    actual_chars: int
+    target_chars: int
+    delta: int
+    deviation: float
+    suggestion: str | None = Field(
+        default=None, description="compress / expand / None"
+    )

@@ -141,3 +141,15 @@ export interface KGEdge {
   relation: string
   properties: Record<string, string>
 }
+
+export type WordCountStatus = 'within' | 'over' | 'under'
+export type RewriteMode = 'expand' | 'compress'
+
+export interface WordCountCheck {
+  status: WordCountStatus
+  actual_chars: number
+  target_chars: number
+  delta: number
+  deviation: number
+  suggestion: RewriteMode | null
+}
