@@ -12,6 +12,7 @@ from app.api.ai_schemas import (
     SceneCardRequest,
     SceneDraftRequest,
     WordCountCheck,
+    WordCountCheckRequest,
 )
 from app.core.config import settings
 from app.core.database import get_db
@@ -21,6 +22,7 @@ from app.services.context_pack import (
     assemble_context_pack,
     get_scene_project_id,
 )
+from app.services.word_count import build_rewrite_prompt, check_word_budget
 
 router = APIRouter(prefix="/api/generate", tags=["generation"])
 
@@ -124,10 +126,8 @@ async def stream_scene_draft(
 
 
 @router.post("/word-count-check", response_model=WordCountCheck)
-async def word_count_check(req: RewriteRequest):
+async def word_count_check(req: WordCountCheckRequest):
     """Check if scene text fits within the target char budget."""
-    from app.services.word_count import check_word_budget
-
     return check_word_budget(req.text, req.target_chars)
 
 
@@ -140,14 +140,20 @@ async def rewrite_scene(
     if not scene:
         raise HTTPException(404, "Scene not found")
 
-    from app.services.word_count import build_rewrite_prompt, check_word_budget
-
     budget = check_word_budget(req.text, req.target_chars)
     if budget["status"] == "within":
         raise HTTPException(
             400,
             f"Text already within budget "
             f"(deviation={budget['deviation']:.1%})",
+        )
+
+    expected_mode = budget["suggestion"]
+    if req.mode != expected_mode:
+        raise HTTPException(
+            400,
+            f"Mode '{req.mode}' conflicts with budget status "
+            f"'{budget['status']}': expected '{expected_mode}'",
         )
 
     prompt = build_rewrite_prompt(

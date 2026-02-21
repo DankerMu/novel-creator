@@ -130,19 +130,9 @@ def test_compress_prompt_contains_key_info():
 @pytest.mark.asyncio
 async def test_word_count_check_endpoint(client):
     """POST /api/generate/word-count-check returns budget status."""
-    pid = await _setup_project(client)
-    bid = await _setup_book(client, pid)
-    cid = await _setup_chapter(client, bid)
-    sid = await _setup_scene(client, cid)
-
     resp = await client.post(
         "/api/generate/word-count-check",
-        json={
-            "scene_id": sid,
-            "text": "a" * 1200,
-            "target_chars": 1000,
-            "mode": "compress",
-        },
+        json={"text": "a" * 1200, "target_chars": 1000},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -154,19 +144,9 @@ async def test_word_count_check_endpoint(client):
 @pytest.mark.asyncio
 async def test_word_count_check_within(client):
     """Within-budget text returns status='within'."""
-    pid = await _setup_project(client)
-    bid = await _setup_book(client, pid)
-    cid = await _setup_chapter(client, bid)
-    sid = await _setup_scene(client, cid)
-
     resp = await client.post(
         "/api/generate/word-count-check",
-        json={
-            "scene_id": sid,
-            "text": "a" * 1000,
-            "target_chars": 1000,
-            "mode": "expand",
-        },
+        json={"text": "a" * 1000, "target_chars": 1000},
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "within"
@@ -228,11 +208,29 @@ async def test_rewrite_target_chars_validation(client):
     """target_chars must be between 100 and 50000."""
     resp = await client.post(
         "/api/generate/word-count-check",
+        json={"text": "some text", "target_chars": 50},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_rewrite_mode_direction_mismatch(client):
+    """Rewrite rejects mode that conflicts with budget direction."""
+    pid = await _setup_project(client)
+    bid = await _setup_book(client, pid)
+    cid = await _setup_chapter(client, bid)
+    sid = await _setup_scene(client, cid)
+
+    # Text is 20% over budget → suggestion is 'compress'
+    # but we send mode='expand' → should be rejected
+    resp = await client.post(
+        "/api/generate/rewrite",
         json={
-            "scene_id": 1,
-            "text": "some text",
-            "target_chars": 50,
+            "scene_id": sid,
+            "text": "a" * 1200,
+            "target_chars": 1000,
             "mode": "expand",
         },
     )
-    assert resp.status_code == 422
+    assert resp.status_code == 400
+    assert "conflicts" in resp.json()["detail"]

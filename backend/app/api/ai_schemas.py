@@ -51,7 +51,9 @@ class ChapterSummaryModel(BaseModel):
 
 class RewriteRequest(BaseModel):
     scene_id: int
-    text: str = Field(description="当前场景正文")
+    text: str = Field(
+        description="当前场景正文", max_length=100000
+    )
     target_chars: int = Field(
         default=1500, ge=100, le=50000,
         description="目标字数",
@@ -59,6 +61,16 @@ class RewriteRequest(BaseModel):
     mode: str = Field(
         description="重写模式: expand 或 compress",
         pattern="^(expand|compress)$",
+    )
+
+
+class WordCountCheckRequest(BaseModel):
+    text: str = Field(
+        description="当前场景正文", max_length=100000
+    )
+    target_chars: int = Field(
+        default=1500, ge=100, le=50000,
+        description="目标字数",
     )
 
 
