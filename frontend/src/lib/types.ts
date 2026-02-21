@@ -110,6 +110,20 @@ export interface KGProposal {
   created_at: string
 }
 
+export type ConflictSeverity = 'high' | 'medium' | 'low'
+export type ConflictType = 'character_status' | 'timeline' | 'possession' | 'plot_thread' | 'repetition'
+
+export interface ConsistencyResult {
+  type: ConflictType
+  severity: ConflictSeverity
+  confidence: number
+  source: string
+  message: string
+  evidence: string[]
+  evidence_locations: string[]
+  suggest_fix: string
+}
+
 export interface KGNode {
   id: number
   project_id: number
