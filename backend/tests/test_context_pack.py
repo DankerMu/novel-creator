@@ -5,15 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.ai_schemas import ChapterSummaryModel
-
-MOCK_SUMMARY = ChapterSummaryModel(
-    narrative="第一章讲述了冒险的开始。",
-    key_events=["出发"],
-    keywords=["冒险"],
-    entities=["林远"],
-    plot_threads=["寻找宝藏"],
-)
+MOCK_SUMMARY_DICT = {
+    "narrative": "第一章讲述了冒险的开始。",
+    "key_events": ["出发"],
+    "keywords": ["冒险"],
+    "entities": ["林远"],
+    "plot_threads": ["寻找宝藏"],
+}
 
 
 async def _setup_full_project(client):
@@ -62,9 +60,16 @@ async def _setup_full_project(client):
         json={"content_md": "前文内容。", "created_by": "user"},
     )
 
-    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
-    with patch("app.services.summary.instructor_client") as mc:
-        mc.chat.completions.create = mock_create
+    mock_resp = MagicMock()
+    mock_resp.choices = [
+        MagicMock(
+            message=MagicMock(
+                content=json.dumps(MOCK_SUMMARY_DICT, ensure_ascii=False)
+            )
+        )
+    ]
+    mock_llm = AsyncMock(return_value=mock_resp)
+    with patch("app.services.summary.call_llm", new=mock_llm):
         await client.post(f"/api/chapters/{ch1_id}/mark-done")
 
     # Lorebook entry

@@ -16,7 +16,7 @@ def get_instructor_client():
         api_key=settings.LLM_API_KEY,
         base_url=settings.LLM_API_BASE,
     )
-    return instructor.from_openai(client)
+    return instructor.from_openai(client, mode=instructor.Mode.JSON)
 
 
 # Module-level alias for backward compatibility

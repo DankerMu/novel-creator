@@ -1,7 +1,7 @@
 """Tests for AI generation endpoints with mocked LLM."""
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -39,29 +39,45 @@ async def _setup_hierarchy(client):
     return pid, bid, cid, sid
 
 
-MOCK_SCENE_CARD = SceneCard(
-    title="飞船坠落",
-    location="荒漠星球",
-    time="公元3050年",
-    characters=["林远", "AI助手"],
-    conflict="飞船引擎故障，必须在日落前修复",
-    turning_point="发现外星遗迹",
-    reveal="遗迹中有修复零件",
-    target_chars=1500,
-)
+MOCK_SCENE_CARD_DICT = {
+    "title": "飞船坠落",
+    "location": "荒漠星球",
+    "time": "公元3050年",
+    "characters": ["林远", "AI助手"],
+    "conflict": "飞船引擎故障，必须在日落前修复",
+    "turning_point": "发现外星遗迹",
+    "reveal": "遗迹中有修复零件",
+    "target_chars": 1500,
+}
+
+MOCK_SCENE_CARD = SceneCard(**MOCK_SCENE_CARD_DICT)
+
+
+def _mock_llm_response(data: dict):
+    """Create a mock LLM response with JSON content."""
+    mock_resp = MagicMock()
+    mock_resp.choices = [
+        MagicMock(
+            message=MagicMock(
+                content=json.dumps(data, ensure_ascii=False)
+            )
+        )
+    ]
+    return mock_resp
 
 
 @pytest.mark.asyncio
 async def test_generate_scene_card(client):
-    """Scene card generation with mocked Instructor."""
+    """Scene card generation with mocked LLM."""
     _pid, _bid, cid, sid = await _setup_hierarchy(client)
 
-    mock_create = AsyncMock(return_value=MOCK_SCENE_CARD)
+    mock_llm = AsyncMock(
+        return_value=_mock_llm_response(MOCK_SCENE_CARD_DICT)
+    )
 
     with patch(
-        "app.api.generation.instructor_client"
-    ) as mock_client:
-        mock_client.chat.completions.create = mock_create
+        "app.api.generation.call_llm", new=mock_llm
+    ):
         resp = await client.post(
             "/api/generate/scene-card",
             json={
@@ -78,9 +94,10 @@ async def test_generate_scene_card(client):
     assert data["target_chars"] == 1500
 
     # Verify context pack was included in the prompt
-    call_args = mock_create.call_args
-    prompt = call_args.kwargs["messages"][0]["content"]
-    assert "科幻" in prompt  # locked bible field injected
+    call_args = mock_llm.call_args
+    messages = call_args.args[0]
+    user_msg = messages[1]["content"]
+    assert "科幻" in user_msg  # locked bible field injected
 
 
 @pytest.mark.asyncio

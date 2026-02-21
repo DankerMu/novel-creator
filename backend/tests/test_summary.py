@@ -1,10 +1,9 @@
 """Tests for chapter summary endpoints with mocked LLM."""
 
-from unittest.mock import AsyncMock, patch
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from app.api.ai_schemas import ChapterSummaryModel
 
 
 async def _setup_chapter_with_text(client):
@@ -63,14 +62,36 @@ async def _setup_empty_chapter(client):
     return pid, bid, cid
 
 
-MOCK_SUMMARY = ChapterSummaryModel(
-    narrative="林远在荒漠星球遭遇飞船故障，"
+MOCK_SUMMARY_DICT = {
+    "narrative": "林远在荒漠星球遭遇飞船故障，"
     "必须在恶劣环境中寻找修复方案。",
-    key_events=["飞船引擎故障", "发现外星遗迹"],
-    keywords=["飞船", "荒漠星球", "引擎故障"],
-    entities=["林远", "荒漠星球", "飞船"],
-    plot_threads=["引擎修复", "外星文明线索"],
-)
+    "key_events": ["飞船引擎故障", "发现外星遗迹"],
+    "keywords": ["飞船", "荒漠星球", "引擎故障"],
+    "entities": ["林远", "荒漠星球", "飞船"],
+    "plot_threads": ["引擎修复", "外星文明线索"],
+}
+
+
+def _mock_llm_response(data: dict):
+    """Create a mock LLM response with JSON content."""
+    mock_resp = MagicMock()
+    mock_resp.choices = [
+        MagicMock(
+            message=MagicMock(
+                content=json.dumps(data, ensure_ascii=False)
+            )
+        )
+    ]
+    return mock_resp
+
+
+def _patch_call_llm(data: dict = None):
+    """Patch call_llm to return mock summary JSON."""
+    resp = _mock_llm_response(data or MOCK_SUMMARY_DICT)
+    return patch(
+        "app.services.summary.call_llm",
+        new=AsyncMock(return_value=resp),
+    )
 
 
 @pytest.mark.asyncio
@@ -80,12 +101,7 @@ async def test_mark_done_generates_summary(client):
         client
     )
 
-    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
-
-    with patch(
-        "app.services.summary.instructor_client"
-    ) as mock_client:
-        mock_client.chat.completions.create = mock_create
+    with _patch_call_llm():
         resp = await client.post(
             f"/api/chapters/{cid}/mark-done"
         )
@@ -129,12 +145,11 @@ async def test_mark_done_idempotent(client):
         client
     )
 
-    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
+    mock_llm = AsyncMock(
+        return_value=_mock_llm_response(MOCK_SUMMARY_DICT)
+    )
 
-    with patch(
-        "app.services.summary.instructor_client"
-    ) as mock_client:
-        mock_client.chat.completions.create = mock_create
+    with patch("app.services.summary.call_llm", new=mock_llm):
         resp1 = await client.post(
             f"/api/chapters/{cid}/mark-done"
         )
@@ -146,9 +161,12 @@ async def test_mark_done_idempotent(client):
         f"/api/chapters/{cid}/mark-done"
     )
     assert resp2.status_code == 200
-    assert resp2.json()["summary_md"] == MOCK_SUMMARY.narrative
+    assert (
+        resp2.json()["summary_md"]
+        == MOCK_SUMMARY_DICT["narrative"]
+    )
     # LLM was only called once
-    assert mock_create.call_count == 1
+    assert mock_llm.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -158,12 +176,7 @@ async def test_get_summary(client):
         client
     )
 
-    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
-
-    with patch(
-        "app.services.summary.instructor_client"
-    ) as mock_client:
-        mock_client.chat.completions.create = mock_create
+    with _patch_call_llm():
         await client.post(f"/api/chapters/{cid}/mark-done")
 
     resp = await client.get(
@@ -171,8 +184,8 @@ async def test_get_summary(client):
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["summary_md"] == MOCK_SUMMARY.narrative
-    assert data["key_events"] == MOCK_SUMMARY.key_events
+    assert data["summary_md"] == MOCK_SUMMARY_DICT["narrative"]
+    assert data["key_events"] == MOCK_SUMMARY_DICT["key_events"]
 
 
 @pytest.mark.asyncio
@@ -193,12 +206,7 @@ async def test_extract_chapter_summary(client):
         client
     )
 
-    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
-
-    with patch(
-        "app.services.summary.instructor_client"
-    ) as mock_client:
-        mock_client.chat.completions.create = mock_create
+    with _patch_call_llm():
         resp = await client.post(
             f"/api/chapters/{cid}/extract-summary"
         )
@@ -215,26 +223,19 @@ async def test_extract_upsert(client):
         client
     )
 
-    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
-
-    with patch(
-        "app.services.summary.instructor_client"
-    ) as mock_client:
-        mock_client.chat.completions.create = mock_create
+    with _patch_call_llm():
         resp1 = await client.post(
             f"/api/chapters/{cid}/extract-summary"
         )
-        # Re-extract with updated mock
-        updated = ChapterSummaryModel(
-            narrative="更新后的摘要",
-            key_events=["新事件"],
-            keywords=["新关键词"],
-            entities=["新角色"],
-            plot_threads=["新线索"],
-        )
-        mock_client.chat.completions.create = AsyncMock(
-            return_value=updated
-        )
+
+    updated = {
+        "narrative": "更新后的摘要",
+        "key_events": ["新事件"],
+        "keywords": ["新关键词"],
+        "entities": ["新角色"],
+        "plot_threads": ["新线索"],
+    }
+    with _patch_call_llm(updated):
         resp2 = await client.post(
             f"/api/chapters/{cid}/extract-summary"
         )
@@ -253,11 +254,7 @@ async def test_summary_in_context_pack(
     )
 
     # Generate summary for chapter 1
-    mock_create = AsyncMock(return_value=MOCK_SUMMARY)
-    with patch(
-        "app.services.summary.instructor_client"
-    ) as mock_client:
-        mock_client.chat.completions.create = mock_create
+    with _patch_call_llm():
         await client.post(f"/api/chapters/{cid1}/mark-done")
 
     # Create chapter 2 in the same book

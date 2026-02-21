@@ -1,6 +1,8 @@
 """AI generation endpoints: scene card + streaming draft."""
 
 import json
+import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -16,7 +18,7 @@ from app.api.ai_schemas import (
 )
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.llm import call_llm_stream, instructor_client
+from app.core.llm import call_llm, call_llm_stream
 from app.models import Chapter, Scene
 from app.services.context_pack import (
     assemble_context_pack,
@@ -24,7 +26,29 @@ from app.services.context_pack import (
 )
 from app.services.word_count import build_rewrite_prompt, check_word_budget
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/generate", tags=["generation"])
+
+_SCENE_CARD_SYSTEM = """\
+你是一位专业的小说编辑。根据上下文为场景生成一张场景卡。
+返回一个 JSON 对象，包含以下字段：
+
+{
+  "title": "场景标题",
+  "location": "场景地点",
+  "time": "时间",
+  "characters": ["人物1", "人物2"],
+  "conflict": "核心冲突",
+  "turning_point": "转折点",
+  "reveal": "揭示/悬念",
+  "target_chars": 1500
+}
+
+规则：
+- 只输出合法 JSON，不要 markdown 围栏
+- target_chars 为整数，建议 1000-2000
+"""
 
 
 @router.post("/scene-card", response_model=SceneCard)
@@ -49,22 +73,49 @@ async def generate_scene_card(
     )
 
     prompt = f"""\
-你是一位专业的小说编辑。根据以下上下文，为场景「{scene.title}」\
-（所属章节：{chapter.title}）生成一张场景卡。
+场景「{scene.title}」（所属章节：{chapter.title}）
 
+上下文：
 {context}
 
-用户补充说明：{req.hints or '无'}
+用户补充说明：{req.hints or '无'}"""
 
-请生成包含标题、地点、时间、出场人物、核心冲突、转折点、揭示和目标字数的场景卡。"""
+    messages = [
+        {"role": "system", "content": _SCENE_CARD_SYSTEM},
+        {"role": "user", "content": prompt},
+    ]
 
-    result = await instructor_client.chat.completions.create(
-        model=settings.LLM_MODEL,
-        response_model=SceneCard,
-        messages=[{"role": "user", "content": prompt}],
-        max_retries=settings.LLM_MAX_RETRIES,
+    response = await call_llm(
+        messages, response_format={"type": "json_object"}
     )
-    return result
+    raw = response.choices[0].message.content or ""
+    data = _parse_scene_card_json(raw)
+    return SceneCard(**data)
+
+
+def _parse_scene_card_json(raw: str) -> dict:
+    """Parse scene card JSON from LLM output with fence/quote repair."""
+    m = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+    if m:
+        raw = m.group(1).strip()
+    else:
+        idx = raw.find("{")
+        if idx > 0:
+            raw = raw[idx:]
+    raw = re.sub(
+        r'(?<=[\u4e00-\u9fff\u3400-\u4dbf])"(?=[\u4e00-\u9fff\u3400-\u4dbf])',
+        r'\\"',
+        raw,
+    )
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Failed to parse scene card JSON: %s", raw[:200])
+        return {
+            "title": "", "location": "", "time": "",
+            "characters": [], "conflict": "",
+        }
 
 
 @router.post("/scene-draft")
